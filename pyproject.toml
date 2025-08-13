@@ -1,0 +1,19 @@
+[project]
+name = "django-rest-spreadsheets"
+version = "1.0.0"
+authors = [
+  { name="Gerben van Eerten", email="info@gerbenvaneerten.nl" },
+]
+description = "Spreadsheets based on django rest framework"
+readme = "README.md"
+requires-python = ">=3.9"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+license = "MIT"
+license-files = ["LICENCE*"]
+
+[project.urls]
+Homepage = "https://github.com/g3rb3n/django-rest-spreadsheets"
+Issues = "https://github.com/g3rb3n/django-rest-spreadsheets/issues"

@@ -1,3 +1,6 @@
 .coverage
 db.sqlite3
 node_modules/
+build/
+dist/
+django_rest_spreadsheets.egg-info/

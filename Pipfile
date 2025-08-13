@@ -18,6 +18,10 @@ pytest-django = "*"
 factory-boy = "*"
 playwright = "*"
 pytest-playwright = "*"
+setuptools = "*"
+wheel = "*"
+twine = "*"
+build = "*"
 
 [requires]
 python_version = "3.10"

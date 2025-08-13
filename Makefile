@@ -40,3 +40,17 @@ open-ui:
 
 open-coverage:
 	chromium $(CURDIR)/htmlcov/index.html
+
+build-dist:
+	pipenv run python -m build --sdist
+
+upload-dist:
+	pipenv run python -m twine upload dist/*
+
+upload-dist-test:
+	pipenv run python -m twine upload --repository testpypi dist/*
+
+cleanup:
+	rm -rf build
+	rm -rf dist
+	rm -rf django_rest_spreadsheets.egg-info

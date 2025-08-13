@@ -1,7 +1,8 @@
 <!DOCTYPE html>
+{% load static %}
 <html>
     <head>
-        <link rel="icon" type="image/png" href="/static/spreadsheet/img/icon.png" />
+        <link rel="icon" type="image/png" href="{% static "spreadsheet/img/icon.png" %}" />
         <script type="application/json" id="drf_csrf">
         {
           "csrfHeaderName": "X-CSRFTOKEN",
@@ -9,28 +10,26 @@
         }
         </script>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.0.0-alpha1/jquery.js"></script>
-        <script src="/static/deps/jquery-ui.js"></script>
-        <script src="/static/deps/jquery.datetimepicker.full.js"></script>
-        <script src="/static/deps/moment.js"></script>
-        <script src='/static/rest_framework/js/csrf.js'></script>
-        <script src='/static/spreadsheet/js/RestApi6.js'></script>
-        <script src='/static/spreadsheet/js/ScreenStack.js'></script>
-        <script src='/static/spreadsheet/js/SpreadSheet.js'></script>
+        <script src="{% static "deps/jquery-ui.js" %}"></script>
+        <script src="{% static "deps/jquery.datetimepicker.full.js" %}"></script>
+        <script src="{% static "deps/moment.js" %}"></script>
+        <script src="{% static "rest_framework/js/csrf.js" %}"></script>
+        <script src="{% static "spreadsheet/js/RestApi6.js" %}"></script>
+        <script src="{% static "spreadsheet/js/ScreenStack.js" %}"></script>
+        <script src="{% static "spreadsheet/js/SpreadSheet.js" %}"></script>
 
-        <link rel=stylesheet type="text/css" href='/static/spreadsheet/css/reset.css'/>
-        <link rel=stylesheet type="text/css" href="/static/deps/jquery-ui.css"/ >
-        <link rel=stylesheet type="text/css" href="/static/deps/jquery.datetimepicker.css"/ >
-        <link rel=stylesheet type="text/css" href='/static/spreadsheet/css/spreadsheet.css'/>
-        <link rel=stylesheet type="text/css" href='/static/spreadsheet/css/menu.css'/>
-        <link rel=stylesheet type="text/css" href='/static/spreadsheet/css/screen.css'/>
+        <link rel=stylesheet type="text/css" href="{% static "spreadsheet/css/reset.css" %}"/>
+        <link rel=stylesheet type="text/css" href="{% static "deps/jquery-ui.css" %}"/ >
+        <link rel=stylesheet type="text/css" href="{% static "deps/jquery.datetimepicker.css" %}"/ >
+        <link rel=stylesheet type="text/css" href="{% static "spreadsheet/css/spreadsheet.css" %}"/>
+        <link rel=stylesheet type="text/css" href="{% static "spreadsheet/css/menu.css" %}"/>
+        <link rel=stylesheet type="text/css" href="{% static "spreadsheet/css/screen.css" %}"/>
 
         <script>
 var onSchemaComplete = function(schema){
-    const startModel = 'HiveRecord';
     $('nav ul.models li').sort(function(a,b) {
         return a.dataset.class.localeCompare(b.dataset.class);
     }).appendTo('nav ul.models');
-    $(`li[data-class=${startModel}]`).click();
 }
 
 $(document).ready(function(){
@@ -58,7 +57,7 @@ $(document).ready(function(){
     </head>
     <body>
         <header>
-            <img src="/static/spreadsheet/img/icon.png" />
+            <img src="{% static "spreadsheet/img/icon.png" %}" />
             <nav class='menu'>
                 <ul>
                     <li class="menu-item">
