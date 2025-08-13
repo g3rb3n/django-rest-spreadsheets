@@ -1,0 +1,246 @@
+
+* {
+    font-size: 10pt;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    display: flex;
+    flex-direction: column;
+    width: 100vw;
+    height: 100vh;
+}
+
+header {
+    position: relative;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    height: 5vh;
+}
+
+header img {
+    height: 3vh;
+    width: 3vh;
+    margin: 1vh;
+}
+
+header h1 {
+    text-align: center;
+    font-size: larger;
+    flex-grow: 1;
+}
+
+main {
+    flex-grow: 1;
+    position: relative;
+}
+
+footer {
+    height: 2vh;
+}
+
+
+.disabled {
+    opacity: .5;
+}
+
+.error {
+    border-color: red;
+}
+
+/*****
+ overlay
+*****/
+.overlay {
+    display: none;
+}
+
+.overlay.visible {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: block;
+    background: white;
+    overflow: auto;
+}
+
+/*****
+ * Tables
+*****/
+table {
+    min-width: 100%;
+    table-layout: auto;
+}
+
+col {
+    width: auto;
+}
+
+col[type=object] {
+    min-width: 100px;
+}
+
+th[type=integer] h2 ,
+col[type=integer] {
+    max-width: 10ch;
+    width: 10ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+col[type=integer] {
+    text-align: right;
+}
+
+col[type=date] {
+    min-width: 10ch;
+}
+
+col[type=boolean] {
+    width: 20px;
+}
+
+col[type=string] {
+    width: 400px;
+    max-width: 400px;
+}
+
+tr {
+    width: 100%;
+    border:  0;
+    margin: 0;
+    padding: 0;
+}
+
+td,
+th {
+    max-width: 400px;
+    padding: 0px 2px;
+    margin: 0;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+th {
+    padding: 4px 2px;
+}
+
+td:last-child {
+    display: flex;
+    flex-direction: row;
+    justify-content: flex-end;
+}
+
+table, th, td {
+    border: 1px solid rgb(211, 211, 211);
+    border-collapse: collapse;
+}
+
+td input , 
+td select {
+    border: none;
+    outline: none;
+    width: 100%;
+    box-sizing: border-box;
+    background: transparent;
+}
+
+table button {
+    margin: 1px;
+    padding: 1px 5px;
+    border: 1px solid black;
+}
+
+table button {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    background-size: contain;
+
+    /* Hide the text visually but keep for screen readers */
+    text-indent: -9999px;
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+button[data-action=create] {
+    background: url('/static/spreadsheet/img/create.svg') no-repeat center center;
+}
+
+button[data-action=update] {
+    background: url('/static/spreadsheet/img/update.svg') no-repeat center center;
+}
+
+button[data-action=delete] {
+    background: url('/static/spreadsheet/img/delete.svg') no-repeat center center;
+}
+
+button[data-action=cancel] {
+    background: url('/static/spreadsheet/img/cancel.svg') no-repeat center center;
+}
+
+form table .row {
+    margin:0
+}
+
+h3 {
+    padding: 1em;
+}
+.related {
+    margin-top: 1em;
+}
+.related div {
+    display: none;
+}
+.related.expanded div{
+    display: block;
+}
+
+td ,
+th {
+    position: relative;
+    overflow: visible;
+}
+
+th h2 {
+    width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+th .tooltip ,
+td .feedback {
+    visibility: hidden;
+    background-color: white;
+    color: black;
+    opacity: 1;
+    padding: 4px 8px;
+    border-radius: 4px;
+    position: absolute;
+    left: 0;
+    white-space: nowrap;
+    z-index: 20;
+}
+
+td .feedback {
+    top: -30px;
+}
+
+th .tooltip {
+    top: 0px;
+    padding: 4px 2px;
+}
+
+th:hover .tooltip ,
+td.error .feedback {
+    visibility: visible;
+}
+
+input[type=number] {
+    text-align: right;
+}

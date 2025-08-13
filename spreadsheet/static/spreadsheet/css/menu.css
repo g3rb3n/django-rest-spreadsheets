@@ -1,0 +1,46 @@
+.menu {
+    height: 100%;
+    line-height: 100%;
+    align-items: stretch;
+}
+
+.menu ul {
+    display: flex;
+    list-style: none;
+}
+
+.menu > ul {
+    height: 100%;
+    line-height: 100%;
+    align-items: end;
+}
+
+.menu ul h2 {
+    height: 100%;
+    font-weight: normal;
+}
+
+.menu > ul > li {
+    position: relative;
+    padding: 10px 20px;
+    cursor: pointer;
+}
+
+.menu ul.dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    min-width: 200px;
+    z-index: 100;
+    display: none;
+    flex-direction: column;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+}
+
+.menu .dropdown li {
+    padding: 8px 16px;
+}
+
+.menu-item:hover .dropdown {
+    display: flex;
+}

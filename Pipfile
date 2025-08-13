@@ -1,0 +1,23 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+django = "*"
+djangorestframework = "*"
+markdown = "*"
+django-filter = "*"
+pyyaml = "*"
+django-cors-headers = "*"
+
+[dev-packages]
+pytest = "*"
+pytest-cov = "*"
+pytest-django = "*"
+factory-boy = "*"
+playwright = "*"
+pytest-playwright = "*"
+
+[requires]
+python_version = "3.10"

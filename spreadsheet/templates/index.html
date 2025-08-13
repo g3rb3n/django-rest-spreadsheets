@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <link rel="icon" type="image/png" href="/static/spreadsheet/img/icon.png" />
+        <script type="application/json" id="drf_csrf">
+        {
+          "csrfHeaderName": "X-CSRFTOKEN",
+          "csrfToken": "{{ csrf_token }}"
+        }
+        </script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.0.0-alpha1/jquery.js"></script>
+        <script src="/static/deps/jquery-ui.js"></script>
+        <script src="/static/deps/jquery.datetimepicker.full.js"></script>
+        <script src="/static/deps/moment.js"></script>
+        <script src='/static/rest_framework/js/csrf.js'></script>
+        <script src='/static/spreadsheet/js/RestApi6.js'></script>
+        <script src='/static/spreadsheet/js/ScreenStack.js'></script>
+        <script src='/static/spreadsheet/js/SpreadSheet.js'></script>
+
+        <link rel=stylesheet type="text/css" href='/static/spreadsheet/css/reset.css'/>
+        <link rel=stylesheet type="text/css" href="/static/deps/jquery-ui.css"/ >
+        <link rel=stylesheet type="text/css" href="/static/deps/jquery.datetimepicker.css"/ >
+        <link rel=stylesheet type="text/css" href='/static/spreadsheet/css/spreadsheet.css'/>
+        <link rel=stylesheet type="text/css" href='/static/spreadsheet/css/menu.css'/>
+        <link rel=stylesheet type="text/css" href='/static/spreadsheet/css/screen.css'/>
+
+        <script>
+var onSchemaComplete = function(schema){
+    const startModel = 'HiveRecord';
+    $('nav ul.models li').sort(function(a,b) {
+        return a.dataset.class.localeCompare(b.dataset.class);
+    }).appendTo('nav ul.models');
+    $(`li[data-class=${startModel}]`).click();
+}
+
+$(document).ready(function(){
+    SpreadSheet.init({
+        restBaseUrl: 'http://{{host}}/rest/api/',
+        schemaUrl: 'http://{{host}}/rest/schema/',
+        onSchemaComplete: onSchemaComplete,
+    })
+    $('nav ul.models').on('click', 'li', function(){
+        const $li = $(this);
+        const model = $li.attr('data-class');
+        $('h1').text(model);
+        $(`[data-view=${model}]`).remove()
+        SpreadSheet.createTableForModel(model);
+        var $table = $('table[data-class=' + $li.attr('data-class') + ']');
+        var $overlay = $table.parent();
+        ScreenStack.push($overlay);
+        $($overlay).addClass('visible');
+        if ($table){
+            $table.trigger('refresh');
+        }
+    });
+});
+        </script>
+    </head>
+    <body>
+        <header>
+            <img src="/static/spreadsheet/img/icon.png" />
+            <nav class='menu'>
+                <ul>
+                    <li class="menu-item">
+                        <h2>Models</h2>
+                        <ul class='dropdown models'></ul>
+                    </li>
+                    <li class="menu-item">
+                        <h2>Other</h2>
+                    </li>
+                </ul>
+            </nav>
+            <h1 class="model"></h1>
+        </header>
+        <main></main>
+        <footer></footer>
+    </body>
+</html>
