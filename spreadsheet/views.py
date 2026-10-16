@@ -3,10 +3,13 @@ import logging
 
 from django.db import models as djmodels
 from django.db import models
+from django.db.models import ProtectedError, RestrictedError
 from django.http import JsonResponse
 from django.shortcuts import render
 from django.views.decorators.csrf import ensure_csrf_cookie
+from django_filters.rest_framework import DjangoFilterBackend, FilterSet
 
+from rest_framework import status
 from rest_framework import viewsets
 from rest_framework.response import Response
 from rest_framework import permissions as permissions
@@ -41,6 +44,8 @@ def v(model, serializer, order_key=None, base_url=''):
         else:
             queryset = model.objects.all()
         serializer_class = serializer
+        filter_backends = [DjangoFilterBackend]
+        filterset_fields = filterable_fields(model)
 
         def _set_field(self, response, field):
             if isinstance(field, rfs.DecimalField):
@@ -84,20 +89,27 @@ def v(model, serializer, order_key=None, base_url=''):
                 self._set_fields(response['actions']['PUT'])
             return Response(response)
 
-        def get_queryset(self, *args, **kwargs):
-            """
-            """
-            fargs = {}
-            for arg in self.request.GET:
-                if arg == 'format':
-                    continue
-                if arg == 'limit':
-                    continue
-                if arg == 'offset':
-                    continue
-                fargs[arg] = self.request.GET[arg]
-            return super().get_queryset(*args, **kwargs).filter(**fargs)
+        def destroy(self, request, *args, **kwargs):
+            try:
+                return super().destroy(request, *args, **kwargs)
+            except (ProtectedError, RestrictedError) as error:
+                # on_delete=PROTECT/RESTRICT blocks the cascade.
+                return Response({'detail': error.args[0]}, status=status.HTTP_409_CONFLICT)
     return ViewSet
+
+
+def filterable_fields(model):
+    """
+    The model's own columns that django-filter can match exactly. Only
+    these are accepted as query parameters (?place=bed, ?variety=3), so
+    no lookups (__startswith) or joins through relations.
+    """
+    names = []
+    for field in model._meta.concrete_fields:
+        filter_class, _ = FilterSet.filter_for_lookup(field, 'exact')
+        if filter_class is not None:
+            names.append(field.name)
+    return names
 
 
 def field_to_relation_string(field):
