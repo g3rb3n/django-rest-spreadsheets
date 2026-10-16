@@ -25,3 +25,20 @@ make setup-bookkeeping   # database, demo data and the superuser from config.mk
 make run-bookkeeping     # http://localhost:8001
 make test-bookkeeping
 ```
+
+# Todo
+## Access limitations
+Should this be done here or handled elsewhere?
+## Sorting
+Sorting in combination with paging.
+## Paging
+Load only x records at start, add when scrolling.
+## Auto update on change
+Don't require a click to update 
+## Auto add when required columns are filled
+Don't require a click to add
+## Sticky table header
+Keep header in viewport when scrolling
+## Switch to es6
+## No jquery
+
