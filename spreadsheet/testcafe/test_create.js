@@ -1,116 +1,120 @@
-import { Selector, RequestLogger } from 'testcafe';
+import { Role, Selector } from 'testcafe';
 
+// Run against a server with a superuser, e.g. `make run-background` after
+// `make setup`; the Makefile passes the credentials from config.mk.
+const BASE_URL = process.env.BASE_URL || 'http://localhost:8000/';
+const USERNAME = process.env.DJANGO_SUPERUSER_USERNAME || 'admin';
+const PASSWORD = process.env.DJANGO_SUPERUSER_PASSWORD;
 
-const apiLogger = RequestLogger(
-    /\/rest\/api\/Variety\//, // regex for the URL
-    {
-        logResponseBody: true,
-        logResponseHeaders: true
-    }
-);
-fixture`Variety Create Test`
-    .page`http://localhost:8000/`; // your Django server
-
-test('Create Variety button works', async t => {
-    // Selector for the dynamically generated button
-
-    const menu = Selector('.menu-item');
-    const menuVariety = Selector('li[data-class=Variety]');
-    const logo = Selector('header img')
-    const buttonCreate = Selector('button')
-        .withAttribute('data-action', 'create');
-
-    const inputName = Selector('input[name="name"]');
-    const tr = Selector('table[data-class=Variety] tr');
-
+const admin = Role(BASE_URL, async t => {
     await t
-        .hover(menu)
-        .click(menuVariety)
-        .hover(logo);
-    const countBefore = await tr.count;
-    await t
-        .typeText(inputName, 'Japanse Wineberry')
-        .click(buttonCreate);
-    //await t.expect(apiLogger.contains(r => r.response.statusCode === 200)).ok({ timeout: 5000 });
-    const countAfter = await tr.count;
+        .click('.avatar-button')
+        .click('.user-menu-panel .menu-action')
+        .typeText('dialog [name=username]', USERNAME)
+        .typeText('dialog [name=password]', PASSWORD)
+        .click('dialog button.primary')
+        .expect(Selector('.avatar-button .avatar.anonymous').exists).notOk();
+}, { preserveUrl: true });
 
-    await t.expect(countAfter - countBefore).eql(1);
+// Unique names, so the tests only ever touch records they created.
+const unique = label => `${label} ${Date.now()}`;
+
+const table = model => Selector(`table[data-class=${model}]`);
+const newItem = model => table(model).find('tr[data-action=create]');
+const rows = model => table(model).find('tr.row');
+const rowWith = (model, field, value) => rows(model)
+    .filter(tr => tr.querySelector(`[name=${field}]`).value === value, { field, value });
+const errors = Selector('.messages .message');
+const contextMenu = Selector('.context-menu');
+
+// Pick an action from the row's right-click menu, as in Google Sheets.
+async function rowAction(t, row, action) {
+    await t
+        .rightClick(row.find('td').nth(1))
+        .click(contextMenu.find(`[data-action=${action}]`));
+}
+
+async function openModel(t, model) {
+    const tab = Selector('.sheet-tabs li').withAttribute('data-class', model);
+    await t
+        .click(tab)
+        .expect(tab.hasClass('active')).ok()
+        .expect(table(model).exists).ok();
+}
+
+async function createVariety(t, name) {
+    await openModel(t, 'Variety');
+    await t.typeText(newItem('Variety').find('[name=name]'), name);
+    await rowAction(t, newItem('Variety'), 'create');
+    await t.expect(rowWith('Variety', 'name', name).exists).ok();
+}
+
+async function deleteVariety(t, name) {
+    await openModel(t, 'Variety');
+    await rowAction(t, rowWith('Variety', 'name', name), 'delete');
+    await t.expect(rowWith('Variety', 'name', name).exists).notOk();
+}
+
+fixture`Spreadsheet`
+    .page(BASE_URL)
+    .before(() => {
+        if (!PASSWORD)
+            throw new Error('Set DJANGO_SUPERUSER_PASSWORD (make test-cafe takes it from config.mk)');
+    });
+
+test('Anonymous visitors get a read-only table', async t => {
+    await openModel(t, 'Variety');
+    await t
+        .expect(newItem('Variety').exists).notOk()
+        // The right-click menu only offers Copy: no editing, no row actions.
+        .rightClick(rows('Variety').nth(0).find('td').nth(1))
+        .expect(contextMenu.find('[data-action=copy]').hasAttribute('disabled')).notOk()
+        .expect(contextMenu.find('[data-action=cut]').hasAttribute('disabled')).ok()
+        .expect(contextMenu.find('[data-action=paste]').hasAttribute('disabled')).ok()
+        .expect(contextMenu.find('[data-action=delete]').exists).notOk();
 });
 
-test('Delete Variety button works', async t => {
-    // Selector for the dynamically generated button
+test('Create, update and delete a Variety', async t => {
+    await t.useRole(admin);
+    const name = unique('Japanese Wineberry');
+    const renamed = `${name} (renamed)`;
+    await createVariety(t, name);
 
-    const menu = Selector('.menu-item');
-    const menuVariety = Selector('li[data-class=Variety]');
-    const logo = Selector('header img')
-    const buttonDelete = Selector('button')
-        .withAttribute('data-action', 'delete')
-        .nth(-1);
-    const tr = Selector('table[data-class=Variety] tr');
-
+    // Cells save on change; reopening the table shows what the server has.
     await t
-        .hover(menu)
-        .click(menuVariety)
-        .hover(logo);
-    const countBefore = await tr.count;
-    await t
-        .click(buttonDelete);
-    const countAfter = await tr.count;
+        .typeText(rowWith('Variety', 'name', name).find('[name=name]'), renamed, { replace: true })
+        .pressKey('tab')
+        .expect(errors.exists).notOk();
+    await openModel(t, 'Variety');
+    await t.expect(rowWith('Variety', 'name', renamed).exists).ok();
 
-    await t.expect(countAfter - countBefore).eql(-1);
+    await deleteVariety(t, renamed);
+    await t.expect(errors.exists).notOk();
 });
 
-test('Update Variety button works', async t => {
-    // Selector for the dynamically generated button
+test('Create a Plant, removed with its Variety', async t => {
+    await t.useRole(admin);
+    const variety = unique('Tayberry');
+    const place = unique('Garden');
+    await createVariety(t, variety);
 
-    const menu = Selector('.menu-item');
-    const menuVariety = Selector('li[data-class=Variety]');
-    const logo = Selector('header img')
-    const inputName = Selector('input[name="name"]').nth(-1);
-    const buttonUpdate = Selector('button')
-        .withAttribute('data-action', 'update')
-        .nth(-1);
-    const tr = Selector('table[data-class=Variety] tr');
-    const trItem = Selector('table[data-class=Variety] tr')
-        .nth(-1);
-
+    await openModel(t, 'Plant');
+    const select = newItem('Plant').find('[name=variety]');
     await t
-        .hover(menu)
-        .click(menuVariety)
-        .hover(logo);
-    const countBefore = await tr.count;
+        .typeText(newItem('Plant').find('[name=date_planted]'), '2025-03-21')
+        .pressKey('esc')
+        .typeText(newItem('Plant').find('[name=place]'), place)
+        .click(select)
+        .click(select.find('option').withExactText(variety))
+        // Enter in the new-item row adds it too.
+        .pressKey('enter')
+        .expect(rowWith('Plant', 'place', place).exists).ok()
+        .expect(rowWith('Plant', 'place', place).find('[name=variety] option:checked').innerText).eql(variety);
+
+    // Deleting the Variety cascades to the Plant.
+    await deleteVariety(t, variety);
+    await openModel(t, 'Plant');
     await t
-        .typeText(inputName, 'Japanse Wineberry')
-        .click(buttonUpdate);
-    const countAfter = await tr.count;
-
-    await t.expect(countAfter - countBefore).eql(0);
-});
-
-
-test('Create Plant button works', async t => {
-    const menu = Selector('.menu-item');
-    const menuPlant = Selector('li[data-class=Plant]');
-    const logo = Selector('header img')
-    const buttonCreate = Selector('button')
-        .withAttribute('data-action', 'create');
-
-    const selectVariery = Selector('select[name="variety"]');
-    const inputDate = Selector('input[name="date_planted"]');
-    const inputPlace = Selector('input[name="place"]');
-
-    const tr = Selector('table[data-class=Plant] tr');
-    await t
-        .hover(menu)
-        .click(menuPlant)
-        .hover(logo);
-    const countBefore = await tr.count;
-    await t
-        .click(selectVariery)
-        .click(selectVariery.find('option[value="http://localhost:8000/rest/api/Variety/1/"]'))
-        .typeText(inputDate, '2025-03-21')
-        .typeText(inputPlace, 'Garden')
-        .click(buttonCreate);
-    const countAfter = await tr.count;
-    await t.expect(countAfter - countBefore).eql(1);
+        .expect(rowWith('Plant', 'place', place).exists).notOk()
+        .expect(errors.exists).notOk();
 });

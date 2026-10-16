@@ -9,21 +9,22 @@
           "csrfToken": "{{ csrf_token }}"
         }
         </script>
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.0.0-alpha1/jquery.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
         <script src="{% static "deps/jquery-ui.js" %}"></script>
         <script src="{% static "deps/jquery.datetimepicker.full.js" %}"></script>
         <script src="{% static "deps/moment.js" %}"></script>
-        <script src="{% static "rest_framework/js/csrf.js" %}"></script>
         <script src="{% static "spreadsheet/js/RestApi6.js" %}"></script>
         <script src="{% static "spreadsheet/js/ScreenStack.js" %}"></script>
         <script src="{% static "spreadsheet/js/SpreadSheet.js" %}"></script>
+        <script src="{% static "spreadsheet/js/UserMenu.js" %}"></script>
+        {{ spreadsheet_auth|json_script:"spreadsheet-auth" }}
 
         <link rel=stylesheet type="text/css" href="{% static "spreadsheet/css/reset.css" %}"/>
-        <link rel=stylesheet type="text/css" href="{% static "deps/jquery-ui.css" %}"/ >
-        <link rel=stylesheet type="text/css" href="{% static "deps/jquery.datetimepicker.css" %}"/ >
+        <link rel=stylesheet type="text/css" href="{% static "deps/jquery-ui.css" %}"/>
+        <link rel=stylesheet type="text/css" href="{% static "deps/jquery.datetimepicker.css" %}"/>
         <link rel=stylesheet type="text/css" href="{% static "spreadsheet/css/spreadsheet.css" %}"/>
-        <link rel=stylesheet type="text/css" href="{% static "spreadsheet/css/menu.css" %}"/>
         <link rel=stylesheet type="text/css" href="{% static "spreadsheet/css/screen.css" %}"/>
+        <link rel=stylesheet type="text/css" href="{% static "spreadsheet/css/usermenu.css" %}"/>
 
         <script>
 var onSchemaComplete = function(schema){
@@ -33,45 +34,96 @@ var onSchemaComplete = function(schema){
 }
 
 $(document).ready(function(){
+    // Like Google Sheets, there is always a sheet open: start with the first.
     SpreadSheet.init({
-        restBaseUrl: 'http://{{host}}/rest/api/',
-        schemaUrl: 'http://{{host}}/rest/schema/',
+        restBaseUrl: '{% url 'api-root' %}',
+        schemaUrl: '{% url 'schema' %}',
         onSchemaComplete: onSchemaComplete,
-    })
-    $('nav ul.models').on('click', 'li', function(){
-        const $li = $(this);
-        const model = $li.attr('data-class');
-        $('h1').text(model);
-        $(`[data-view=${model}]`).remove()
-        SpreadSheet.createTableForModel(model);
-        var $table = $('table[data-class=' + $li.attr('data-class') + ']');
-        var $overlay = $table.parent();
-        ScreenStack.push($overlay);
-        $($overlay).addClass('visible');
-        if ($table){
-            $table.trigger('refresh');
-        }
+    }).then(openFirstModel);
+    $('nav ul.models')
+        .on('click', 'li', function(){
+            openModel($(this).attr('data-class'));
+        })
+        .on('keydown', 'li', onTabKeydown);
+    const auth = JSON.parse(document.getElementById('spreadsheet-auth').textContent);
+    UserMenu.init({
+        container: '#user-menu',
+        user: auth.user,
+        usernameLabel: auth.usernameLabel,
+        loginUrl: '{% url 'spreadsheet-login' %}',
+        logoutUrl: '{% url 'spreadsheet-logout' %}',
+        onChange: onUserChange,
     });
 });
+
+function openModel(model){
+    $('h1').text(model);
+    $('nav ul.models li')
+        .removeClass('active').attr({'aria-selected': 'false', tabindex: '-1'})
+        .filter(`[data-class="${model}"]`)
+        .addClass('active').attr({'aria-selected': 'true', tabindex: '0'})
+        .each((_, tab) => tab.scrollIntoView({block: 'nearest', inline: 'nearest'}));
+    // One sheet at a time; a tab's table is built fresh each time it opens.
+    $('main .overlay').remove()
+    SpreadSheet.createTableForModel(model);
+    var $table = $(`table[data-class="${model}"]`);
+    var $overlay = $table.parent();
+    ScreenStack.push($overlay);
+    $($overlay).addClass('visible');
+    if ($table.length){
+        $table.trigger('refresh');
+    }
+}
+
+function openFirstModel(){
+    const $first = $('nav ul.models li').first();
+    if ($first.length)
+        openModel($first.attr('data-class'));
+    else
+        $('h1').text('');
+}
+
+// Arrow keys move between tabs, Home/End to the first/last one.
+function onTabKeydown(ev){
+    const $tabs = $('nav ul.models li');
+    const index = $tabs.index(this);
+    const moves = {ArrowRight: index + 1, ArrowLeft: index - 1, Home: 0, End: $tabs.length - 1};
+    let $target;
+    if (ev.key in moves)
+        $target = $tabs.eq((moves[ev.key] + $tabs.length) % $tabs.length);
+    else if (ev.key === 'Enter' || ev.key === ' ')
+        $target = $(this);
+    else
+        return;
+    ev.preventDefault();
+    openModel($target.attr('data-class'));
+    $target.trigger('focus');
+}
+
+// Another user sees other models and actions: reload and reopen the table.
+function onUserChange(){
+    const model = $('h1').text();
+    SpreadSheet.reload().then(schema => {
+        $('main').empty();
+        if (schema && model && schema[model])
+            openModel(model);
+        else
+            openFirstModel();
+    });
+}
         </script>
     </head>
     <body>
         <header>
             <img src="{% static "spreadsheet/img/icon.png" %}" />
-            <nav class='menu'>
-                <ul>
-                    <li class="menu-item">
-                        <h2>Models</h2>
-                        <ul class='dropdown models'></ul>
-                    </li>
-                    <li class="menu-item">
-                        <h2>Other</h2>
-                    </li>
-                </ul>
-            </nav>
             <h1 class="model"></h1>
+            <div id="user-menu"></div>
         </header>
         <main></main>
-        <footer></footer>
+        <footer>
+            <nav class="sheet-tabs" aria-label="Models">
+                <ul class="models" role="tablist"></ul>
+            </nav>
+        </footer>
     </body>
 </html>

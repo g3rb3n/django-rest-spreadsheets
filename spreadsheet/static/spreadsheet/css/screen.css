@@ -14,17 +14,8 @@ button {
     color: black;
 }
 
-.menu-item ul {
-    background-color: white;
-    color: #000000;
-}
-
 li:hover{
     background: #f5f5f5;
-}
-
-.ui-datepicker {
-    display: block;
 }
 
 .xdsoft_datetimepicker.xdsoft_noselect.xdsoft_ {

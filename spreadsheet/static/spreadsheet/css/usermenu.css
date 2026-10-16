@@ -1,0 +1,224 @@
+/*****
+ * Account menu, top right, as in Google Sheets
+*****/
+.user-menu {
+    position: relative;
+    margin: 0 12px 0 8px;
+}
+
+.avatar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    color: white;
+    font-family: "Roboto", "Google Sans", Arial, sans-serif;
+    font-weight: 500;
+    line-height: 1;
+    user-select: none;
+}
+
+.avatar.small {
+    width: 32px;
+    height: 32px;
+    font-size: 15px;
+}
+
+.avatar.large {
+    width: 80px;
+    height: 80px;
+    font-size: 36px;
+}
+
+.avatar.anonymous {
+    background: #e8eaed;
+    color: #5f6368;
+}
+
+.avatar.small.anonymous {
+    font-size: 18px;
+}
+
+.avatar.large.anonymous {
+    font-size: 44px;
+}
+
+header .avatar-button {
+    display: flex;
+    padding: 2px;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    cursor: pointer;
+}
+
+header .avatar-button:hover ,
+header .avatar-button:focus-visible ,
+.user-menu.open .avatar-button {
+    background: rgba(60, 64, 67, .12);
+    outline: none;
+}
+
+.user-menu-panel {
+    display: none;
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    z-index: 150;
+    width: 300px;
+    max-width: calc(100vw - 32px);
+    box-sizing: border-box;
+    padding: 24px 16px 20px;
+    border-radius: 16px;
+    background: #e9eef6;
+    box-shadow: 0 4px 8px 3px rgba(60, 64, 67, .15), 0 1px 3px rgba(60, 64, 67, .3);
+    text-align: center;
+    color: #1f1f1f;
+}
+
+.user-menu.open .user-menu-panel {
+    display: block;
+}
+
+.user-menu-panel .name {
+    margin-top: 12px;
+    font-size: 16px;
+}
+
+.user-menu-panel .username {
+    margin-top: 2px;
+    font-size: 13px;
+    color: #444746;
+}
+
+header .user-menu-panel .menu-action {
+    margin-top: 20px;
+    padding: 9px 24px;
+    border: 1px solid #747775;
+    border-radius: 999px;
+    background: white;
+    color: #0b57d0;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+header .user-menu-panel .menu-action:hover ,
+header .user-menu-panel .menu-action:focus-visible {
+    background: #f1f4f9;
+    outline: none;
+}
+
+/*****
+ * Log in / log out dialogs
+*****/
+.auth-dialog {
+    width: min(360px, calc(100vw - 32px));
+    box-sizing: border-box;
+    margin: auto;
+    padding: 24px;
+    border: none;
+    border-radius: 28px;
+    background: white;
+    color: #1f1f1f;
+    box-shadow: 0 8px 24px rgba(60, 64, 67, .3);
+}
+
+.auth-dialog::backdrop {
+    background: rgba(32, 33, 36, .6);
+}
+
+.auth-dialog h2 {
+    margin-bottom: 16px;
+    font-size: 22px;
+    font-weight: 400;
+}
+
+.auth-dialog p {
+    font-size: 14px;
+    color: #444746;
+}
+
+.auth-dialog .field {
+    margin-bottom: 16px;
+}
+
+.auth-dialog label {
+    display: block;
+    margin-bottom: 4px;
+    font-size: 12px;
+    color: #444746;
+}
+
+.auth-dialog input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 10px 12px;
+    border: 1px solid #747775;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.auth-dialog input:focus {
+    border-color: #0b57d0;
+    outline: 1px solid #0b57d0;
+}
+
+.auth-dialog .field.error input {
+    border-color: #b3261e;
+    outline-color: #b3261e;
+}
+
+.auth-dialog .field-error ,
+.auth-dialog .form-error {
+    display: block;
+    font-size: 12px;
+    color: #b3261e;
+}
+
+.auth-dialog .field-error:not(:empty) {
+    margin-top: 4px;
+}
+
+.auth-dialog .form-error:not(:empty) {
+    margin-bottom: 12px;
+}
+
+.auth-dialog .dialog-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.auth-dialog button {
+    padding: 10px 24px;
+    border: none;
+    border-radius: 999px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.auth-dialog button.text {
+    background: transparent;
+    color: #0b57d0;
+}
+
+.auth-dialog button.text:hover {
+    background: rgba(11, 87, 208, .08);
+}
+
+.auth-dialog button.primary {
+    background: #0b57d0;
+    color: white;
+}
+
+.auth-dialog button.primary:hover {
+    background: #0842a0;
+}
+
+.auth-dialog button:disabled {
+    opacity: .6;
+    cursor: default;
+}

@@ -12,6 +12,8 @@ test-py:
 	pipenv run python -m pytest spreadsheet/tests/ --cov=spreadsheet --cov-report=html
 
 test-cafe:
+	DJANGO_SUPERUSER_USERNAME=$(DJANGO_SUPERUSER_USERNAME) \
+	DJANGO_SUPERUSER_PASSWORD=$(DJANGO_SUPERUSER_PASSWORD) \
 	npx testcafe "chrome" spreadsheet/testcafe/test_create.js
 
 run:

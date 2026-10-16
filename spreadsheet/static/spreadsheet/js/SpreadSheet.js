@@ -1,19 +1,71 @@
 const SpreadSheet = (() => {
     let baseUrl;
+    let schemaUrl;
+    let onSchemaComplete;
     let gSchema = {};
     const objectCache = {};
     const selectDataCache = {}
     $.datetimepicker.setDateFormatter('moment');
 
+    const MESSAGE_TIMEOUT = 10000;
+
+    /**
+     * Show a message at the bottom of the screen. It disappears after
+     * MESSAGE_TIMEOUT or when closed; repeating a message restarts it.
+     */
+    function showMessage(text, level = 'error') {
+        let $messages = $('.messages');
+        if (!$messages.length) {
+            $messages = $('<div>')
+                .addClass('messages')
+                .attr('role', 'status')
+                .attr('aria-live', 'polite')
+                .appendTo('body');
+        }
+        $messages.children().filter((_, el) => $(el).data('text') === text).remove();
+        const $message = $('<div>')
+            .addClass('message')
+            .addClass(level)
+            .data('text', text)
+            .appendTo($messages);
+        $('<span>').addClass('text').text(text).appendTo($message);
+        $('<button>')
+            .addClass('close')
+            .attr('aria-label', 'Dismiss')
+            .text('×')
+            .on('click', () => $message.remove())
+            .appendTo($message);
+        setTimeout(() => $message.remove(), MESSAGE_TIMEOUT);
+    }
+
+    /**
+     * Human readable text for a failed RestApi6 request: DRF's detail or
+     * field errors, the HTTP status, or the network error.
+     */
+    function errorText(error) {
+        const data = error && error.data;
+        if (data && typeof data == 'object') {
+            return Object.keys(data).map(key => {
+                const text = [].concat(data[key]).join(' ');
+                return (key == 'detail' || key == 'non_field_errors') ? text : `${key}: ${text}`;
+            }).join(' ');
+        }
+        if (error && error.status)
+            return `Request failed (${error.status})`;
+        return `Request failed: ${error && error.message || error}`;
+    }
+
+    function showError(what, error) {
+        console.error(error);
+        showMessage(`Could not ${what}: ${errorText(error)}`);
+    }
+
+    // Anything that slipped past the handlers below still gets reported.
+    window.addEventListener('unhandledrejection', event => showError('complete the request', event.reason));
+
 
     function toString(type, data) {
         return data._str;
-    }
-
-    var urlToString = function(url, data){
-        var cls = url.split('/').splice(-3)[0];
-        console.log('urlToString:' + cls)
-        return toString(cls, data);
     }
 
     /**
@@ -42,6 +94,31 @@ const SpreadSheet = (() => {
      */
     function schemaForModel(modelName) {
         return gSchema[modelName];
+    }
+
+    /**
+     * Whether the user may perform action (read, create, update, delete)
+     * on modelName, as reported by the schema from the project's API
+     * permissions. A schema without actions allows everything.
+     */
+    function can(modelName, action) {
+        const actions = (gSchema[modelName] || {}).actions;
+        return !actions || actions[action] !== false;
+    }
+
+    /**
+     * The primary key field of a model schema, if it has one.
+     */
+    function keyField(schema) {
+        const name = schema.fields.find(key => schema.properties[key].isKey);
+        return name ? schema.properties[name] : null;
+    }
+
+    /**
+     * The row header cell (as in a spreadsheet) showing the primary key.
+     */
+    function createKeyCell(tag, schema) {
+        return $(`<${tag}>`).addClass('key').attr('data-name', keyField(schema).name);
     }
 
     /**
@@ -78,6 +155,9 @@ const SpreadSheet = (() => {
         if (action == 'delete' && url in objectCache) delete objectCache[url];
 
         var $tables = $('table[data-class="' + modelName + '"]');
+        $tables.each((_, table) => {
+            if ($(table).data('loading')) $(table).data('outdated', true);
+        });
         var $forms = $('form[data-class="' + modelName + '"]');
         var $selects = $('select[data-class="' + modelName + '"]');
         console.log($selects)
@@ -85,51 +165,111 @@ const SpreadSheet = (() => {
             case 'create': handleCreate(modelName, url, data, $tables, $forms, $selects); return;
             case 'update': handleUpdate(modelName, url, data, $tables, $forms, $selects); return;
             case 'delete': handleDelete(modelName, url, data, $tables, $forms, $selects); return;
-            default: console.log('No  handler for action ' + action + ' in updateData');
+            default: console.error('No handler for action ' + action + ' in updateData');
         }
     }
 
     function handleCreate(modelName, url, data, $tables, $form, $selects){
         console.log('handleCreate')
+        if (url in selectDataCache){
+            delete selectDataCache[url];
+        }
         const schema = schemaForModel(modelName);
         $tables.each(function(idx){
             var $table = $(this);
             addTableRow($table, schema, modelName, data);
         })
-        createOption(modelName, data).appendTo($selects);
+        console.log(data);
+        let $option = createOption(modelName, data);
+        $option.appendTo($selects);
+        console.log($option);
         fixSelections($selects)
     }
 
     function handleUpdate(modelName, url, data, $tables, $forms, $selects){
         console.log('handleUpdate')
-        for (key in data){
-            if (key == 'url') continue;
-            console.log('handleUpdate url ' + url)
-            console.log('handleUpdate key ' + key)
-            console.log('handleUpdate val ' + data[key])
-            if (typeof data[key] == 'string')
-                if (data[key].startsWith('http')){
-                    var url2 = data[key];
-                    RestApi6.get(url2)
-                        .then(data => {
-                            console.log('handleUpdate get ' + url2)
-                            var str = urlToString(url2, data);
-                            console.log('str:' + str)
-                            updateInputs(url, key, data[key]);
-                        })
-                    continue;
-                }
-            updateInputs(url, key, data[key]);
-            $('option[data-url="' + url + '"]').text(data[key]);
+        let modelUrl = urlForModel(modelName);
+        if (modelUrl in selectDataCache){
+            delete selectDataCache[modelUrl];
         }
+        // Foreign keys arrive as URLs, which are also the <option> values,
+        // so every field can be written back as is.
+        for (const key in data){
+            if (key == '_' || key == '_str') continue;
+            updateInputs(url, key, data[key]);
+        }
+        $('option[data-url="' + url + '"]').text(toString(modelName, data));
     }
 
     function handleDelete(modelName, url, data, $tables, $forms, $selects){
         console.log('handleDelete')
+        let modelUrl = urlForModel(modelName);
+        if (modelUrl in selectDataCache){
+            delete selectDataCache[modelUrl];
+        }
         var $elems = $('[data-url="' + url + '"]')
         console.log('removed elems from UI ' + $elems.length)
         $elems.remove();
         fixSelections($selects)
+        // The server may have cascaded the delete (or set references to
+        // null) in models pointing at this one; resync what is on screen.
+        referencingModels(modelName).forEach(syncModel);
+    }
+
+    /**
+     * Models with a foreign key to modelName, directly or through a chain
+     * of foreign keys, so a delete can cascade into them. Includes
+     * modelName itself when it references itself.
+     */
+    function referencingModels(modelName){
+        const found = new Set();
+        const todo = [modelName];
+        while (todo.length){
+            const target = todo.pop();
+            for (const name in gSchema){
+                if (name.startsWith('$') || found.has(name)) continue;
+                const schema = gSchema[name];
+                const refers = schema.fields.some(key => {
+                    const field = schema.properties[key];
+                    // Reverse relations carry a lookup, forward keys don't.
+                    return field.$ref === target && !field.multiple && !('lookup' in field);
+                });
+                if (refers){
+                    found.add(name);
+                    todo.push(name);
+                }
+            }
+        }
+        return [...found];
+    }
+
+    /**
+     * Bring the rows and options shown for modelName in line with the
+     * server: drop objects that no longer exist, rewrite the others.
+     */
+    function syncModel(modelName){
+        const url = urlForModel(modelName);
+        delete selectDataCache[url];
+        const shown = new Set();
+        $(`table[data-class="${modelName}"] tr.row`).each((_, tr) => shown.add($(tr).attr('data-url')));
+        $(`select[data-class="${modelName}"] option[data-url]`).each((_, option) => shown.add($(option).attr('data-url')));
+        if (!shown.size) return;
+        RestApi6.get(url)
+            .then(items => {
+                const byUrl = new Map(items.map(item => [item._, item]));
+                shown.forEach(objectUrl => {
+                    if (byUrl.has(objectUrl)){
+                        updateData('update', modelName, objectUrl, byUrl.get(objectUrl));
+                    } else {
+                        // Not via handleDelete: referencingModels already
+                        // covered the whole chain, so no further resync.
+                        delete objectCache[objectUrl];
+                        $(`[data-url="${objectUrl}"]`).remove();
+                    }
+                });
+                fixSelections($(`select[data-class="${modelName}"]`));
+            })
+            .catch(error => showError(`refresh ${modelName}`, error));
     }
 
     function fixSelections($selects) {
@@ -144,8 +284,11 @@ const SpreadSheet = (() => {
     }
 
     function updateInputs(url, key, value){
-        $('input[data-url="' + url + '"] [name="'+ key + '"]').text(value);
-        $('[data-url="' + url + '"] [name="'+ key + '"]').val(value);
+        const $inputs = $('[data-url="' + url + '"] [name="'+ key + '"]');
+        $inputs.filter(':checkbox').prop('checked', value === true);
+        $inputs.not(':checkbox').val(value);
+        // Keep fixSelections from restoring the value from before the update.
+        $inputs.filter('select').attr('data-selected', value);
     }
 
     /*
@@ -153,85 +296,335 @@ const SpreadSheet = (() => {
     * Button handlers: create, delete, update
     *
     */
-    function buttonCreateOnClick(ev) {
-        console.log('Submit');
-        ev.preventDefault();
-        var $button = $(this)
-        var $tr = $(this).parents('tr');
+    /*
+    *
+    * Row actions: create, save, delete, clear
+    *
+    */
+    function createRow($tr) {
         var url = $tr.attr('data-url')
         var modelName = $tr.attr('data-class')
-        var data = collect_data($tr);
+        var data = collectData($tr);
         RestApi6.post(url, data)
             .then(data => {
                 console.log('got data')
+                clearErrors($tr);
+                clearRow($tr);
                 updateData('create', modelName, url, data);
             })
-            .catch(error => {
-                for (key in error.data){
-                    const $input = $tr.find(`[name='${key}']`);
-                    const $td = $input.closest('td');
-                    $td.find('.feedback').text(error.data[key]);
-                    $td.addClass('error');
-                    $input.on("input", function(){
-                        $td.removeClass('error');
-                    })
-                }
-            });
+            .catch(error => showErrors($tr, error, 'create'));
     }
 
-    function buttonUpdateOnClick(ev){
-        console.log('buttonUpdateOnClick');
-        ev.preventDefault();
-        var $button = $(this);
-        var $tr = $button.closest('tr');
+    function saveRow($tr){
         var url = $tr.attr('data-url');
-        var action = $button.attr('data-action');
-        var modelName = $button.closest('table').attr('data-class');
-        console.log('update:' + url)
-        const data = collect_data($tr);
-        /*
-        $tr.find('[contenteditable="true"]').each(function() {
-            var name = $(this).attr('name');
-            if (name) {
-                data[name] = $(this).text().trim();
-            }
-        });
-        $tr.find('input, select, textarea').each(function() {
-            var name = $(this).attr('name');
-            if (name) {
-                data[name] = $(this).val();
-            }
-        });
-        */
-        console.log(data);
+        var modelName = $tr.attr('data-class');
+        const data = collectData($tr);
         RestApi6.patch(url, data)
             .then(data => {
-                updateData(action, modelName, url, data);
+                clearErrors($tr);
+                updateData('update', modelName, url, data);
             })
-        return;
+            .catch(error => showErrors($tr, error, 'save'));
     }
 
-    function buttonDeleteOnClick(ev){
-        ev.preventDefault();
-        var $button = $(this);
-        var url = $button.closest('tr').attr('data-url');
-        var action = $button.attr('data-action');
-        var modelName = $button.closest('[data-class]').attr('data-class');
+    function deleteRow($tr){
+        var url = $tr.attr('data-url');
+        var modelName = $tr.attr('data-class');
         console.log(`delete: ${modelName} ${url}`)
         RestApi6.delete(url)
             .then(data => {
                 updateData('delete', modelName, url, data)
             })
-        return;
+            .catch(error => showErrors($tr, error, 'delete'));
     }
 
+    function clearRow($tr) {
+        clearErrors($tr);
+        $tr.find(':input').not(':checkbox, select').val('');
+        $tr.find(':checkbox').prop('checked', false);
+        $tr.find('select').each((_, select) => {
+            $(select).val(select.querySelector('option[value=""]') ? '' : null);
+        });
+    }
 
-    function buttonCancelOnClick(ev) {
+    function onDataChange(ev){
+        console.log('onDataChange');
+        saveRow($(this).closest('tr'));
+    }
+
+    // The new-item row has no buttons: Enter adds it (not in a textarea).
+    function onNewItemKeydown(ev){
+        if (ev.key !== 'Enter' || $(ev.target).is('textarea')) return;
         ev.preventDefault();
-        var $button = $(this);
-        const $tr = $button.closest('tr');
-        $tr.find(':input').val('');
+        createRow($(this));
     }
+
+    function clearErrors($tr){
+        $tr.removeClass('error');
+        $tr.find('td.error').removeClass('error');
+    }
+
+    /**
+     * Show a failed request in the row: DRF field errors next to their
+     * input; the row number turns red. The message bar has the details.
+     */
+    function showErrors($tr, error, verb){
+        showError(`${verb} ${$tr.attr('data-class')}`, error);
+        clearErrors($tr);
+        $tr.addClass('error');
+        const data = error && error.data;
+        if (!data || typeof data != 'object') return;
+        for (const key in data){
+            const $input = $tr.find(`[name='${key}']`);
+            if (!$input.length) continue;
+            const $td = $input.closest('td');
+            $td.find('.feedback').text(data[key]);
+            $td.addClass('error');
+            $input.one('input change', function(){
+                $td.removeClass('error');
+            })
+        }
+    }
+
+    /*
+    *
+    * Context menu (right click), as in Google Sheets
+    *
+    */
+    /*
+     * Clipboard: cut, copy and paste a single cell, as in Google Sheets.
+     */
+    const IS_MAC = /Mac|iPhone|iPad/.test(navigator.platform);
+    const shortcut = key => IS_MAC ? `\u2318${key}` : `Ctrl+${key}`;
+
+    function cellInput($td){
+        return $td.find(':input').first();
+    }
+
+    function isEditable($td){
+        const $input = cellInput($td);
+        return $input.length > 0 && !$input.prop('disabled') && !$input.prop('readonly');
+    }
+
+    // The selected part of a text input, if any (not every input type has one).
+    function textSelection(input){
+        try {
+            if (input.selectionStart != null && input.selectionStart !== input.selectionEnd)
+                return [input.selectionStart, input.selectionEnd];
+        } catch (error) {}
+        return null;
+    }
+
+    /**
+     * What the cell shows: the selected text, a dropdown's label (not its
+     * URL), TRUE/FALSE for a checkbox, or the row number.
+     */
+    function cellText($td){
+        const $input = cellInput($td);
+        if (!$input.length) return $td.text().trim();
+        const input = $input[0];
+        if ($input.is(':checkbox')) return input.checked ? 'TRUE' : 'FALSE';
+        if ($input.is('select')) return $input.find('option:selected').text();
+        const range = textSelection(input);
+        return range ? input.value.slice(range[0], range[1]) : input.value;
+    }
+
+    /**
+     * Put text in the cell like typing would, then save as a normal edit.
+     * Returns false when the text doesn't fit the cell.
+     */
+    function setCellText($td, text){
+        const $input = cellInput($td);
+        const input = $input[0];
+        if ($input.is(':checkbox')){
+            const value = text.trim().toLowerCase();
+            if (['true', '1', 'yes', 'y', 'x'].includes(value)) input.checked = true;
+            else if (['false', '0', 'no', 'n', ''].includes(value)) input.checked = false;
+            else return false;
+        } else if ($input.is('select')){
+            const wanted = text.trim().toLowerCase();
+            const option = [...input.options].find(option =>
+                option.text.trim().toLowerCase() === wanted || option.value === text.trim());
+            if (!option) return false;
+            $input.val(option.value);
+        } else {
+            const range = textSelection(input);
+            if (range) input.setRangeText(text, range[0], range[1], 'end');
+            else $input.val(text);
+        }
+        $input.trigger('change');
+        return true;
+    }
+
+    function canClear($td){
+        const $input = cellInput($td);
+        return !$input.is('select') || $input.find('option[value=""]').length > 0;
+    }
+
+    async function writeClipboard(text){
+        if (navigator.clipboard && navigator.clipboard.writeText){
+            try {
+                await navigator.clipboard.writeText(text);
+                return;
+            } catch (error) {
+                console.error(error);
+            }
+        }
+        // Without the async clipboard API (plain http hosts): the old way.
+        const active = document.activeElement;
+        const $textarea = $('<textarea>').val(text).addClass('clipboard-buffer').appendTo('body');
+        $textarea[0].select();
+        const copied = document.execCommand('copy');
+        $textarea.remove();
+        if (active) active.focus();
+        if (!copied) throw new Error('copy was blocked');
+    }
+
+    function copyCell($tr, $td){
+        return writeClipboard(cellText($td))
+            .catch(() => showMessage(`Copying is blocked by the browser, use ${shortcut('C')} instead.`, 'info'));
+    }
+
+    function cutCell($tr, $td){
+        const $input = cellInput($td);
+        const input = $input[0];
+        return writeClipboard(cellText($td))
+            .then(() => {
+                const range = textSelection(input);
+                if (range) {
+                    input.setRangeText('', range[0], range[1], 'end');
+                    $input.trigger('change');
+                } else {
+                    setCellText($td, '');
+                }
+                $input.trigger('focus');
+            })
+            .catch(() => showMessage(`Cutting is blocked by the browser, use ${shortcut('X')} instead.`, 'info'));
+    }
+
+    function pasteCell($tr, $td){
+        if (!navigator.clipboard || !navigator.clipboard.readText){
+            showMessage(`Pasting from the menu is not supported by this browser, use ${shortcut('V')} instead.`, 'info');
+            return Promise.resolve();
+        }
+        return navigator.clipboard.readText()
+            .then(text => {
+                if (!setCellText($td, text))
+                    showMessage(`Cannot paste "${text}" here: it is not one of the options.`);
+                cellInput($td).trigger('focus');
+            }, error => {
+                console.error(error);
+                showMessage(`Pasting from the menu is blocked by the browser, use ${shortcut('V')} instead.`, 'info');
+            });
+    }
+
+    function clipboardActions($td){
+        const editable = isEditable($td);
+        return [
+            {action: 'cut', label: 'Cut', shortcut: shortcut('X'), run: cutCell, disabled: !editable || !canClear($td)},
+            {action: 'copy', label: 'Copy', shortcut: shortcut('C'), run: copyCell},
+            {action: 'paste', label: 'Paste', shortcut: shortcut('V'), run: pasteCell, disabled: !editable},
+        ];
+    }
+
+    function rowActions($tr){
+        const modelName = $tr.attr('data-class');
+        const actions = [];
+        if ($tr.attr('data-action') == 'create'){
+            if (can(modelName, 'create')){
+                actions.push({action: 'create', label: 'Add row', shortcut: 'Enter', run: createRow});
+                actions.push({action: 'cancel', label: 'Clear row', run: clearRow});
+            }
+        } else if ($tr.hasClass('row')){
+            if (can(modelName, 'update'))
+                actions.push({action: 'update', label: 'Save row', run: saveRow});
+            if (can(modelName, 'delete')){
+                if (actions.length) actions.push({separator: true});
+                actions.push({action: 'delete', label: 'Delete row', run: deleteRow});
+            }
+        }
+        return actions;
+    }
+
+    function onContextMenu(ev){
+        const $td = $(this);
+        const $tr = $td.closest('tr');
+        const rows = rowActions($tr);
+        const actions = clipboardActions($td).concat(rows.length ? [{separator: true}] : [], rows);
+        ev.preventDefault();
+        selectCell.call(this);
+        let x = ev.clientX, y = ev.clientY;
+        if (!x && !y){
+            // Opened from the keyboard (menu key, Shift+F10).
+            const rect = this.getBoundingClientRect();
+            x = rect.left;
+            y = rect.bottom;
+        }
+        showContextMenu(actions, $tr, $td, x, y);
+    }
+
+    function showContextMenu(actions, $tr, $td, x, y){
+        closeContextMenu();
+        const $menu = $('<div>')
+            .addClass('context-menu')
+            .attr('role', 'menu')
+            .appendTo('body');
+        actions.forEach(item => {
+            if (item.separator){
+                $('<div>').addClass('separator').attr('role', 'separator').appendTo($menu);
+                return;
+            }
+            const $item = $('<button>')
+                .attr('type', 'button')
+                .attr('role', 'menuitem')
+                .attr('data-action', item.action)
+                .prop('disabled', !!item.disabled)
+                .on('click', () => {
+                    closeContextMenu(true);
+                    item.run($tr, $td);
+                })
+                .appendTo($menu);
+            $('<span>').addClass('icon').attr('aria-hidden', 'true').appendTo($item);
+            $('<span>').addClass('label').text(item.label).appendTo($item);
+            $('<span>').addClass('shortcut').text(item.shortcut || '').appendTo($item);
+        });
+        // Keep it on screen, as close to the pointer as fits.
+        const width = $menu.outerWidth(), height = $menu.outerHeight();
+        $menu.css({
+            left: Math.max(0, Math.min(x, window.innerWidth - width - 4)),
+            top: Math.max(0, Math.min(y, window.innerHeight - height - 4)),
+        });
+        $menu.data('return-focus', document.activeElement);
+        $menu.find('[role=menuitem]:not(:disabled)').first().trigger('focus');
+        $menu.on('keydown', onContextMenuKeydown);
+    }
+
+    function onContextMenuKeydown(ev){
+        const $items = $(this).find('[role=menuitem]:not(:disabled)');
+        const index = $items.index(document.activeElement);
+        if (ev.key == 'ArrowDown' || ev.key == 'ArrowUp'){
+            ev.preventDefault();
+            const step = ev.key == 'ArrowDown' ? 1 : -1;
+            $items.eq((index + step + $items.length) % $items.length).trigger('focus');
+        } else if (ev.key == 'Escape' || ev.key == 'Tab'){
+            ev.preventDefault();
+            closeContextMenu(true);
+        }
+    }
+
+    function closeContextMenu(restoreFocus){
+        const $menu = $('.context-menu');
+        if (!$menu.length) return;
+        const returnFocus = $menu.data('return-focus');
+        $menu.remove();
+        if (restoreFocus && returnFocus) returnFocus.focus();
+    }
+
+    $(document).on('mousedown', ev => {
+        if (!$(ev.target).closest('.context-menu').length) closeContextMenu();
+    });
+    $(window).on('blur resize', () => closeContextMenu());
+    document.addEventListener('scroll', () => closeContextMenu(), true);
 
     /*
     *
@@ -258,25 +651,58 @@ const SpreadSheet = (() => {
             .attr('data-url', baseUrl + modelName + '/');
         createTableColGroup(schema)
             .appendTo($table);
-        createTableHeaderRow(schema)
+        createTableHeaderRow(schema, modelName)
             .appendTo($table);
-        var $form = createTableRowNewItem($table, schema, modelName, 'create');
         $table.on('refresh', function(){
             console.log('table.refresh')
-            var url = $(this).attr('data-url');
-            RestApi6.get(url)
-                .then(data => {
-                    fillTable($table, schema, modelName, data);
-                })
+            loadTable($table, schema, modelName);
         })
-        $form.appendTo($table);
+        if (can(modelName, 'create'))
+            createTableRowNewItem($table, schema, modelName, 'create').appendTo($table);
+        // mousedown as well: read-only (disabled) cells never get focus.
+        $table.on('focusin mousedown', 'td', selectCell);
+        $table.on('mouseover', 'td', hoverCell);
+        $table.on('mouseover', 'th', clearHover);
+        $table.on('mouseleave', clearHover);
+        $table.on('contextmenu', 'td', onContextMenu);
         return $table;
     }
 
-    function createTableHeaderRow(schema){
+    /**
+     * Mark the selected cell, its row and its column header, as Google
+     * Sheets does. Stays until another cell of the table is selected.
+     */
+    function selectCell(){
+        const $td = $(this);
+        const $table = $td.closest('table');
+        $table.find('.selected').removeClass('selected');
+        $td.parent().addClass('selected');
+        $td.addClass('selected');
+        $table.find('tr').first().children().eq(this.cellIndex).addClass('selected');
+    }
+
+    /**
+     * Tint the row and column header of the cell under the mouse, a
+     * fainter version of the selection.
+     */
+    function hoverCell(){
+        const $td = $(this);
+        const $table = $td.closest('table');
+        clearHover.call($table[0]);
+        $td.parent().addClass('hovered');
+        $table.find('tr').first().children().eq(this.cellIndex).addClass('hovered');
+    }
+
+    function clearHover(){
+        $(this).closest('table').find('.hovered').removeClass('hovered');
+    }
+
+    function createTableHeaderRow(schema, modelName){
         console.log('createTableHeaderRow')
         var $tr = $('<tr>')
         console.log(schema)
+        if (keyField(schema))
+            createKeyCell('th', schema).text(keyField(schema).title).appendTo($tr);
         schema.fields.forEach(function(key){
             var field = schema.properties[key];
             if (field.isKey) return
@@ -294,10 +720,6 @@ const SpreadSheet = (() => {
                 .text(field.title)
                 .appendTo($th);
         });
-        $('<th>')
-            .addClass('actions')
-            .text('Actions')
-            .appendTo($tr);
         return $tr;
     }
 
@@ -305,6 +727,8 @@ const SpreadSheet = (() => {
         console.log('createTableColGroup')
         var $cg = $('<colgroup>')
         console.log(schema)
+        if (keyField(schema))
+            $('<col>').addClass('key').appendTo($cg);
         schema.fields.forEach(function(key){
             var field = schema.properties[key];
             if (field.isKey) return
@@ -320,6 +744,27 @@ const SpreadSheet = (() => {
         return $cg;
     }
 
+    /**
+     * Fetch the rows. A row created, saved or deleted while the request is
+     * on its way makes the answer outdated (it would drop the new row or
+     * bring back the deleted one), so then it is fetched again.
+     */
+    function loadTable($table, schema, modelName){
+        const request = {};
+        $table.data('loading', request).data('outdated', false);
+        RestApi6.get($table.attr('data-url'))
+            .then(data => {
+                if ($table.data('loading') !== request) return;  // a newer load runs
+                if ($table.data('outdated')) return loadTable($table, schema, modelName);
+                $table.removeData('loading');
+                fillTable($table, schema, modelName, data);
+            })
+            .catch(error => {
+                if ($table.data('loading') === request) $table.removeData('loading');
+                showError(`load ${modelName}`, error);
+            });
+    }
+
     function fillTable($table, schema, modelName, data){
         console.log('fillTable')
         $table.find('.row').remove()
@@ -328,7 +773,7 @@ const SpreadSheet = (() => {
         })
     }
 
-    function collect_data($form) {
+    function collectData($form) {
         var $fields = $form.find(':input');
         var d = {};
         $fields.each(function(i){
@@ -350,6 +795,19 @@ const SpreadSheet = (() => {
             .attr('data-class', modelName)
             //.attr('method', actionToMethod(action))
             .attr('action', urlForModel(modelName));
+        const key = keyField(schema);
+        if (key){
+            const $key = createKeyCell('td', schema).appendTo($tr);
+            // A natural key is entered on create; generated keys get a hint.
+            if (!key.generated){
+                createInput(key, null).attr('required', 'required').appendTo($key);
+                $('<span>').addClass('feedback').attr('for', key.name).appendTo($key);
+            } else {
+                $key.text('+');
+            }
+        }
+        $tr.attr('title', 'New row: press Enter or right-click to add');
+        $tr.on('keydown', onNewItemKeydown);
         schema.fields.forEach(function(key){
             var field = schema.properties[key];
             if (field.isKey) return;
@@ -359,9 +817,6 @@ const SpreadSheet = (() => {
             if (field.required) $input.attr('required', 'required');
             var $feedback = $('<span>').addClass('feedback').attr('for',field.name).appendTo($td);
         })
-        var $tdActions = $('<td>').appendTo($tr);
-        createTableRowButton(url, 'create', 'Create', buttonCreateOnClick).appendTo($tdActions);
-        createTableRowButton('', 'cancel', 'Cancel', buttonCancelOnClick).appendTo($tdActions);
         return $tr;
     }
 
@@ -369,11 +824,14 @@ const SpreadSheet = (() => {
         var url = urlForModel(modelName);
         var $tr = $('<tr>')
             .addClass('tableform')
+            .addClass('row')
             .attr('data-url', data._)
             .attr('data-action', action)
             .attr('data-class', modelName)
             //.attr('method', actionToMethod(action))
             .attr('action', urlForModel(modelName));
+        if (keyField(schema))
+            createKeyCell('td', schema).text(data[keyField(schema).name]).appendTo($tr);
         schema.fields.forEach(function(key){
             var field = schema.properties[key];
             var value = data[key];
@@ -382,29 +840,24 @@ const SpreadSheet = (() => {
             var $td = $('<td>').appendTo($tr);
             var $input = createInputWithValue(field, value).appendTo($td);
             if (field.required) $input.attr('required', 'required');
+            if (!can(modelName, 'update')) $input.prop('disabled', true);
             var $feedback = $('<span>').addClass('feedback').attr('for',field.name).appendTo($td);
         })
-        var $tdActions = $('<td>').appendTo($tr);
-        createTableRowButton(data._, 'update', 'Update', buttonUpdateOnClick).appendTo($tdActions);
-        createTableRowButton(data._, 'delete', 'Delete', buttonDeleteOnClick).appendTo($tdActions);
         return $tr;
-    }
-
-    function createTableRowButton(url, action, text, onClick){
-        var $button = $('<button>')
-            .attr('data-url', url)
-            .attr('data-action', action)
-            .text(text);
-        $button.on('click', onClick);
-        return $button;
     }
 
     function createInputWithValue(schema, value){
         const $input = createInput(schema, value);
+        // Existing rows save on change; the new-item row waits for Create.
+        $input.on('change', onDataChange);
         if ($input.prop("tagName") == "SELECT"){
             $input.attr('data-selected', value);
+        }else if ($input.attr('type') == 'checkbox'){
+            $input.prop('checked', value === true);
+        }else if ($input.prop("tagName") == "TEXTAREA"){
+            $input.text(value);
         }else{
-            $input.attr('value', value);
+            $input.attr('value', value !== null && typeof value == 'object' ? JSON.stringify(value) : value);
         }
         return $input;
     }
@@ -412,26 +865,35 @@ const SpreadSheet = (() => {
     function createInput(schema, value){
         switch(schema.type){
             case 'string': return $('<input>').attr('type', 'text').attr('name', schema.name);
+            case 'text': return $('<textarea>').attr('rows', 1).attr('name', schema.name);
             case 'number': return $('<input>').attr('type', 'number').attr('step', schema.step).attr('name', schema.name);
             case 'integer': return $('<input>').attr('type', 'number').attr('name', schema.name);
             case 'boolean': return $('<input>').attr('type', 'checkbox').attr('name', schema.name);
-            case 'datetime': return $('<input>').attr('type', 'text').attr('name', schema.name).datetimepicker({ format:'YYYY-MM-DDThh:mm', });
+            case 'datetime': return $('<input>').attr('type', 'text').attr('name', schema.name).datetimepicker({ format:'YYYY-MM-DDTHH:mm', });
             case 'date': return $('<input>').attr('type', 'text').attr('name', schema.name).datepicker({ dateFormat: 'yy-mm-dd' }).show();
-            case 'enum': return createSelectFromEnum(schema).attr('name', schema.name);
+            case 'time': return $('<input>').attr('type', 'text').attr('name', schema.name).datetimepicker({ datepicker: false, format: 'HH:mm', });
+            case 'oneOf': return createSelectFromChoices(schema, value).attr('name', schema.name);
             case 'object': return createSelectFromData(schema, value).attr('name', schema.name);
-            default: throw schema.type + ' is not supported';
+            default:
+                // Show the value but leave it out of collectData (no name),
+                // so one unknown field doesn't break the whole table.
+                console.error(schema.type + ' is not supported, showing ' + schema.name + ' read-only');
+                return $('<input>').attr('type', 'text').prop('readonly', true).attr('title', schema.type + ' is not supported');
         }
     }
 
-    function createSelectFromEnum(schema){
-        console.log('createSelectFromEnum')
+    function createSelectFromChoices(schema, value){
+        console.log('createSelectFromChoices')
         var $select = $('<select>');
-        schema.enum.forEach(function(v){
+        if (!schema.required)
+            $('<option>').attr('value', '').appendTo($select);
+        schema.oneOf.forEach(function(choice){
             $('<option>')
-                .attr('value', v)
-                .text(v)
+                .attr('value', choice.const)
+                .text(choice.title)
                 .appendTo($select);
         })
+        $select.val(value === null || value === undefined ? '' : String(value));
         return $select;
     }
 
@@ -441,6 +903,9 @@ const SpreadSheet = (() => {
         var $select = $('<select>')
             .attr('data-url', url)
             .attr('data-class', schema.$ref);
+        // Optional relations need a way to select "none".
+        if (!schema.required)
+            $('<option>').attr('value', '').appendTo($select);
         if (value)
             $select.attr('data-selected', value);
         cachedFillSelect(schema, url, $select);
@@ -461,6 +926,8 @@ const SpreadSheet = (() => {
             console.log($select.attr('data-selected'))
 
             data.forEach(function(item) {
+                // handleCreate may have added it while the list was loading.
+                if ($select.find(`option[value="${item._}"]`).length) return;
                 createOption(schema.$ref, item).appendTo($select);
             });
             $select.val($select.attr('data-selected'));
@@ -477,7 +944,9 @@ const SpreadSheet = (() => {
         // No cache: make the API call
         else {
             console.log(`cachedFillSelect`)
-            selectDataCache[url] = {
+            // Keep a reference: handleCreate/Update/Delete may drop the
+            // entry from selectDataCache while the request is in flight.
+            const entry = selectDataCache[url] = {
                 status: 'pending',
                 callbacks: [populateSelect]
             };
@@ -485,11 +954,16 @@ const SpreadSheet = (() => {
                 .then(data => {
                     console.log('got data')
                     console.log(data)
-                    selectDataCache[url].status = 'done';
-                    selectDataCache[url].data = data;
+                    entry.status = 'done';
+                    entry.data = data;
                     // Call all queued callbacks
-                    selectDataCache[url].callbacks.forEach(cb => cb(data));
-                    selectDataCache[url].callbacks = [];
+                    entry.callbacks.forEach(cb => cb(data));
+                    entry.callbacks = [];
+                })
+                .catch(error => {
+                    showError(`load the ${schema.$ref} options`, error);
+                    // Let the next select retry instead of waiting forever.
+                    if (selectDataCache[url] === entry) delete selectDataCache[url];
                 });
         }
     }
@@ -503,27 +977,39 @@ const SpreadSheet = (() => {
         baseUrl = config.restBaseUrl;
         schemaUrl = config.schemaUrl;
         onSchemaComplete = config.onSchemaComplete;
-        loadSchema(schemaUrl, onSchemaComplete);
+        return loadSchema(schemaUrl, onSchemaComplete);
     }
 
     /**
      * Load API schema and build navigation
      */
     function loadSchema(url, onSchemaComplete) {
-        RestApi6.get(url).then(dataSchema => {
+        return RestApi6.get(url).then(dataSchema => {
             gSchema = dataSchema;
+            $('nav ul.models').empty();
 
             for (const key in dataSchema) {
                 if (key.startsWith('$')) continue;
                 $('<li>')
-                    .attr('data-class', key)
+                    .attr({'data-class': key, role: 'tab', 'aria-selected': 'false', tabindex: '-1'})
                     .text(key)
                     .appendTo($('nav ul.models'));
             }
             if (typeof onSchemaComplete === 'function') {
                 onSchemaComplete(dataSchema);
             }
-        });
+            return dataSchema;
+        }).catch(error => showError('load the schema', error));
+    }
+
+    /**
+     * Load the schema again, e.g. after logging in or out: the models and
+     * actions it lists depend on the user. Cached data is dropped too.
+     */
+    function reload() {
+        for (const url in objectCache) delete objectCache[url];
+        for (const url in selectDataCache) delete selectDataCache[url];
+        return loadSchema(schemaUrl, onSchemaComplete);
     }
 
     function createTableForModel(model){
@@ -537,7 +1023,8 @@ const SpreadSheet = (() => {
     // Public API
     return {
         init: (url) => init(url),
-        loadSchema: (url, handleSchema, onSchemaComplete) => loadSchema(url, handleSchema, onSchemaComplete),
+        loadSchema: (url, onSchemaComplete) => loadSchema(url, onSchemaComplete),
+        reload: () => reload(),
         createTableForModel: (model) => createTableForModel(model),
     };
 })();

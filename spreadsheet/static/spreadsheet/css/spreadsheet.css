@@ -18,6 +18,9 @@ header {
     flex-direction: row;
     align-items: center;
     height: 5vh;
+    /* Room for the 36px account avatar on short screens. */
+    min-height: 40px;
+    flex-shrink: 0;
 }
 
 header img {
@@ -37,8 +40,55 @@ main {
     position: relative;
 }
 
+/*****
+ * Sheet tabs at the bottom, as in Google Sheets
+*****/
 footer {
-    height: 2vh;
+    display: flex;
+    flex-shrink: 0;
+    height: 40px;
+    background: #f9fbfd;
+    border-top: 1px solid #dadce0;
+}
+
+.sheet-tabs {
+    display: flex;
+    min-width: 0;
+    padding-left: 8px;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+
+.sheet-tabs ul {
+    display: flex;
+    list-style: none;
+}
+
+.sheet-tabs li {
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    color: #444746;
+    font-family: "Roboto", Arial, sans-serif;
+    font-size: 14px;
+    white-space: nowrap;
+    cursor: pointer;
+    user-select: none;
+}
+
+.sheet-tabs li:hover {
+    background: #eef2f9;
+}
+
+.sheet-tabs li.active {
+    background: #e1e9f7;
+    color: #0b57d0;
+    font-weight: 500;
+}
+
+.sheet-tabs li:focus-visible {
+    outline: 2px solid #0b57d0;
+    outline-offset: -2px;
 }
 
 
@@ -130,58 +180,34 @@ th {
     padding: 4px 2px;
 }
 
-td:last-child {
-    display: flex;
-    flex-direction: row;
-    justify-content: flex-end;
-}
-
-table, th, td {
-    border: 1px solid rgb(211, 211, 211);
+/* Google Sheets grid: light gridlines, grey headers with darker lines. */
+table {
     border-collapse: collapse;
 }
 
+th, td {
+    border: 1px solid #e2e3e3;
+}
+
+th ,
+td.key {
+    border-color: #c4c7c5;
+}
+
+th {
+    background: #f8f9fa;
+    color: #444746;
+    font-weight: normal;
+}
+
 td input , 
-td select {
+td select ,
+td textarea {
     border: none;
     outline: none;
     width: 100%;
     box-sizing: border-box;
     background: transparent;
-}
-
-table button {
-    margin: 1px;
-    padding: 1px 5px;
-    border: 1px solid black;
-}
-
-table button {
-    display: inline-block;
-    width: 20px;
-    height: 20px;
-    background-size: contain;
-
-    /* Hide the text visually but keep for screen readers */
-    text-indent: -9999px;
-    overflow: hidden;
-    white-space: nowrap;
-}
-
-button[data-action=create] {
-    background: url('/static/spreadsheet/img/create.svg') no-repeat center center;
-}
-
-button[data-action=update] {
-    background: url('/static/spreadsheet/img/update.svg') no-repeat center center;
-}
-
-button[data-action=delete] {
-    background: url('/static/spreadsheet/img/delete.svg') no-repeat center center;
-}
-
-button[data-action=cancel] {
-    background: url('/static/spreadsheet/img/cancel.svg') no-repeat center center;
 }
 
 form table .row {
@@ -208,6 +234,7 @@ th {
 }
 
 th h2 {
+    font-weight: normal;
     width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -243,4 +270,219 @@ td.error .feedback {
 
 input[type=number] {
     text-align: right;
+}
+
+td textarea {
+    font: inherit;
+    resize: vertical;
+}
+
+/*****
+ * Row header with the primary key, as in Google Sheets
+*****/
+col.key {
+    width: 46px;
+}
+
+th.key ,
+td.key {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    min-width: 46px;
+    padding: 0 6px;
+    background: #f8f9fa;
+    color: #444746;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+    /* Collapsed borders don't stick along; draw the divider instead. */
+    box-shadow: inset -1px 0 0 #c4c7c5;
+}
+
+th.key {
+    z-index: 3;
+    font-weight: normal;
+}
+
+/*****
+ * Hovered cell: a fainter blue on its row and column header. Comes before
+ * the selection rules so a selected header keeps the stronger blue.
+*****/
+th.hovered ,
+tr.hovered td.key {
+    background: #e8f0fe;
+}
+
+/*****
+ * Selected cell with its row and column header, as in Google Sheets
+*****/
+td.selected {
+    outline: 2px solid #1a73e8;
+    outline-offset: -2px;
+}
+
+th.selected ,
+tr.selected td.key {
+    background: #d3e3fd;
+    color: #0b57d0;
+}
+
+th.selected ,
+th.selected h2 ,
+tr.selected td.key {
+    font-weight: bold;
+}
+
+/* Let clicks on read-only cells through, so they can be selected too. */
+td :disabled {
+    pointer-events: none;
+}
+
+td.key input {
+    text-align: center;
+    color: #202124;
+}
+
+/* A failed request marks the row number, the message bar has the details. */
+tr.error td.key {
+    color: #b3261e;
+    box-shadow: inset -1px 0 0 #c4c7c5, inset 3px 0 0 #b3261e;
+}
+
+/*****
+ * Context menu (right click), as in Google Sheets
+*****/
+.context-menu {
+    position: fixed;
+    z-index: 180;
+    min-width: 240px;
+    padding: 6px 0;
+    border-radius: 4px;
+    background: white;
+    box-shadow: 0 2px 6px 2px rgba(60, 64, 67, .15), 0 1px 2px rgba(60, 64, 67, .3);
+    font-family: "Roboto", Arial, sans-serif;
+}
+
+.context-menu [role=menuitem] {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    width: 100%;
+    height: 32px;
+    padding: 0 16px;
+    border: none;
+    background: transparent;
+    color: #1f1f1f;
+    font-size: 14px;
+    text-align: left;
+    cursor: pointer;
+}
+
+.context-menu [role=menuitem]:hover ,
+.context-menu [role=menuitem]:focus-visible {
+    background: #f1f3f4;
+    outline: none;
+}
+
+.context-menu .icon {
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    background: #444746;
+    -webkit-mask: var(--icon) center / contain no-repeat;
+    mask: var(--icon) center / contain no-repeat;
+}
+
+.context-menu .label {
+    flex-grow: 1;
+}
+
+.context-menu .shortcut {
+    color: #5f6368;
+    font-size: 13px;
+}
+
+.context-menu [role=menuitem]:disabled {
+    color: #a8abae;
+    cursor: default;
+}
+
+.context-menu [role=menuitem]:disabled:hover {
+    background: transparent;
+}
+
+.context-menu [role=menuitem]:disabled .icon {
+    background: #a8abae;
+}
+
+.context-menu [role=menuitem]:disabled .shortcut {
+    color: #c4c7c5;
+}
+
+.context-menu .separator {
+    height: 1px;
+    margin: 6px 0;
+    background: #e3e3e3;
+}
+
+.context-menu [data-action=cut] .icon { --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M9.64 7.64c.23-.5.36-1.05.36-1.64 0-2.21-1.79-4-4-4S2 3.79 2 6s1.79 4 4 4c.59 0 1.14-.13 1.64-.36L10 12l-2.36 2.36C7.14 14.13 6.59 14 6 14c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4c0-.59-.13-1.14-.36-1.64L12 14l7 7h3v-1L9.64 7.64zM6 8c-1.1 0-2-.89-2-2s.9-2 2-2 2 .89 2 2-.9 2-2 2zm0 12c-1.1 0-2-.89-2-2s.9-2 2-2 2 .89 2 2-.9 2-2 2zm6-7.5c-.28 0-.5-.22-.5-.5s.22-.5.5-.5.5.22.5.5-.22.5-.5.5zM19 3l-6 6 2 2 7-7V3z'/%3E%3C/svg%3E"); }
+.context-menu [data-action=copy] .icon { --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z'/%3E%3C/svg%3E"); }
+.context-menu [data-action=paste] .icon { --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M19 2h-4.18C14.4.84 13.3 0 12 0c-1.3 0-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-7 0c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm7 18H5V4h2v3h10V4h2v16z'/%3E%3C/svg%3E"); }
+.context-menu [data-action=create] .icon { --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z'/%3E%3C/svg%3E"); }
+.context-menu [data-action=update] .icon { --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z'/%3E%3C/svg%3E"); }
+.context-menu [data-action=delete] .icon { --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M16 9v10H8V9h8m-1.5-6h-5l-1 1H5v2h14V4h-3.5l-1-1zM18 7H6v12c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7z'/%3E%3C/svg%3E"); }
+.context-menu [data-action=cancel] .icon { --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z'/%3E%3C/svg%3E"); }
+
+/*****
+ * Messages
+*****/
+.messages {
+    position: fixed;
+    left: 16px;
+    right: 16px;
+    /* Above the sheet tabs. */
+    bottom: 56px;
+    z-index: 200;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    pointer-events: none;
+}
+
+.message {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    max-width: 100%;
+    padding: 8px 8px 8px 16px;
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, .2);
+    pointer-events: auto;
+}
+
+.message.info {
+    background: #313033;
+    color: #f4eff4;
+}
+
+.message.error {
+    background: #b3261e;
+    color: white;
+}
+
+.message .close {
+    background: transparent;
+    color: inherit;
+    border: none;
+    font-size: 14pt;
+    line-height: 1;
+    cursor: pointer;
+}
+
+/* Off-screen buffer for copying where the async clipboard API is missing. */
+.clipboard-buffer {
+    position: fixed;
+    top: -1000px;
+    opacity: 0;
 }
