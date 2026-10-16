@@ -1,6 +1,6 @@
 [project]
 name = "django-rest-spreadsheets"
-version = "1.0.0"
+version = "1.1.0"
 authors = [
   { name="Gerben van Eerten", email="info@gerbenvaneerten.nl" },
 ]

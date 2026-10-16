@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="django-rest-spreadsheets",
-    version="1.0.0",
+    version="1.1.0",
     author="gerben van Eerten",
     author_email="info@gerbenvaneerten.nl",
     description="Spreadsheets based on django rest framework",
