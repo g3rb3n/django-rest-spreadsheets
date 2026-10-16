@@ -130,6 +130,14 @@ STATICFILES_DIRS = (
 
 ALLOWED_HOSTS = ['localhost', '127.0.0.1']
 
+# Public read access; writing needs the model's add/change/delete
+# permission, which an admin (superuser) has.
+REST_FRAMEWORK = {
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.DjangoModelPermissionsOrAnonReadOnly',
+    ],
+}
+
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:8000",
     "http://127.0.0.1:8000",

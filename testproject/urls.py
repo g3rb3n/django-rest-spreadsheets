@@ -32,6 +32,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('auth/api/', include('rest_framework.urls')),
     path('rest/api/', include(router.urls)),
-    path('rest/schema/', generate_schema_view('testproject.models'), name='schema'),
+    path('rest/auth/', include(urls.auth_urlpatterns)),
+    path('rest/schema/', generate_schema_view('testproject.models', 'testproject.views'), name='schema'),
     path('', index, name='index'),
 ]

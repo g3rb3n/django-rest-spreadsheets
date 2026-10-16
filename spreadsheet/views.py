@@ -1,16 +1,25 @@
+import copy
 import sys, inspect
 import logging
 
+from django.contrib.auth import login as auth_login, logout as auth_logout
+from django.contrib.auth.forms import AuthenticationForm
 from django.db import models as djmodels
 from django.db import models
 from django.db.models import ProtectedError, RestrictedError
 from django.http import JsonResponse
+from django.middleware.csrf import get_token
 from django.shortcuts import render
 from django.views.decorators.csrf import ensure_csrf_cookie
+from django.views.decorators.debug import sensitive_post_parameters
+from django.views.decorators.http import require_GET, require_POST
 from django_filters.rest_framework import DjangoFilterBackend, FilterSet
 
+from rest_framework import exceptions
 from rest_framework import status
 from rest_framework import viewsets
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework import permissions as permissions
 from rest_framework import serializers as rfs
@@ -25,15 +34,66 @@ def props(cls):
     return {el:cls.__dict__[el] for el in cls.__dict__}
 
 
-def schema_view(request):
-    data = generate_schema()
-    return JsonResponse(data)
+# (name reported in the schema, ViewSet action, HTTP method)
+ACTIONS = (
+    ('read', 'list', 'GET'),
+    ('create', 'create', 'POST'),
+    ('update', 'partial_update', 'PATCH'),
+    ('delete', 'destroy', 'DELETE'),
+)
 
 
-def generate_schema_view(models):
+def allowed_actions(viewset_class, request):
+    """
+    Which CRUD actions the ViewSet's own permission classes (the project's
+    DEFAULT_PERMISSION_CLASSES unless it overrides them) allow the user of
+    this request. Checked at model level with has_permission; object level
+    permissions are still enforced by the API on each request.
+    """
+    view = viewset_class()
+    view.args, view.kwargs, view.format_kwarg = (), {}, None
+    allowed = {}
+    for name, action, method in ACTIONS:
+        # A copy of the request with another method and the user already
+        # authenticated (re-authenticating as POST would trip the CSRF check).
+        probe = copy.copy(request._request)
+        probe.method = method
+        probe_request = Request(probe, authenticators=())
+        probe_request.user = request.user
+        probe_request.auth = request.auth
+        view.request = probe_request
+        view.action = action
+        try:
+            allowed[name] = all(
+                permission.has_permission(probe_request, view)
+                for permission in view.get_permissions()
+            )
+        except exceptions.APIException:
+            allowed[name] = False
+    return allowed
+
+
+def generate_schema_view(models, views=None):
+    """
+    With views (the module holding the generated ViewSets) the schema only
+    lists the models the user may read, each with the actions it allows.
+    """
+    # The models are filtered per user below, so the endpoint itself is open.
+    @api_view(['GET'])
+    @permission_classes([permissions.AllowAny])
     def schema_view(request):
         data = generate_schema(sys.modules[models])
-        return JsonResponse(data)
+        if views:
+            viewsets = sys.modules[views].generated
+            for name in list(data):
+                if name not in viewsets:
+                    continue
+                actions = allowed_actions(viewsets[name], request)
+                if actions['read']:
+                    data[name]['actions'] = actions
+                else:
+                    del data[name]
+        return Response(data)
     return schema_view
 
 
@@ -83,10 +143,12 @@ def v(model, serializer, order_key=None, base_url=''):
             logger.debug('ViewSet.options')
             response = super().options(request, format, pk=pk).data
             #logger.debug(dir(response))
-            if 'POST' in response['actions']:
-                self._set_fields(response['actions']['POST'])
-            if 'PUT' in response['actions']:
-                self._set_fields(response['actions']['PUT'])
+            # 'actions' is only present when the user may write.
+            actions = response.get('actions', {})
+            if 'POST' in actions:
+                self._set_fields(actions['POST'])
+            if 'PUT' in actions:
+                self._set_fields(actions['PUT'])
             return Response(response)
 
         def destroy(self, request, *args, **kwargs):
@@ -143,7 +205,62 @@ def generate(models_module, serializers_module, views_module, base_url):
         generated[name] = v(cls, serializers_module.generated[name], None, base_url)
     return generated
 
-@ensure_csrf_cookie 
+def user_info(user):
+    """
+    What the user menu shows. Works with custom user models: the name falls
+    back from the full name to the USERNAME_FIELD value.
+    """
+    if not user.is_authenticated:
+        return {'authenticated': False, 'name': '', 'username': '', 'initial': ''}
+    name = getattr(user, 'get_full_name', lambda: '')() or ''
+    name = name.strip() or user.get_username()
+    return {
+        'authenticated': True,
+        'name': name,
+        'username': user.get_username(),
+        'initial': name[:1].upper(),
+    }
+
+
+def auth_response(request, status=200):
+    # Login rotates the CSRF token; the page needs the new one to keep writing.
+    return JsonResponse({'user': user_info(request.user), 'csrfToken': get_token(request)}, status=status)
+
+
+@require_GET
+def user_view(request):
+    return auth_response(request)
+
+
+@sensitive_post_parameters('password')
+@require_POST
+def login_view(request):
+    """
+    Log in through the project's own authentication backends and user model,
+    with Django's validation and messages (inactive users, wrong password).
+    """
+    form = AuthenticationForm(request, data=request.POST)
+    if not form.is_valid():
+        errors = {
+            'non_field_errors' if key == '__all__' else key: [error['message'] for error in field_errors]
+            for key, field_errors in form.errors.get_json_data().items()
+        }
+        return JsonResponse(errors, status=400)
+    auth_login(request, form.get_user())
+    return auth_response(request)
+
+
+@require_POST
+def logout_view(request):
+    auth_logout(request)
+    return auth_response(request)
+
+
+@ensure_csrf_cookie
 def index(request):
-    host = request.get_host()
-    return render(request, "index.html", {"host": host})
+    auth = {
+        'user': user_info(request.user),
+        # The label of the project's USERNAME_FIELD, e.g. "Email address".
+        'usernameLabel': str(AuthenticationForm().fields['username'].label),
+    }
+    return render(request, "index.html", {'spreadsheet_auth': auth})

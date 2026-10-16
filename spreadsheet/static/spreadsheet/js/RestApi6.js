@@ -13,6 +13,23 @@ const RestApi6 = (() => {
     return formData;
   }
 
+  const SAFE_METHODS = ['GET', 'HEAD', 'OPTIONS', 'TRACE'];
+
+  /**
+   * Read the CSRF header name and token rendered by the template
+   * in <script id="drf_csrf">.
+   */
+  function csrfConfig() {
+    const element = document.getElementById('drf_csrf');
+    if (!element) return null;
+    try {
+      return JSON.parse(element.textContent);
+    } catch (error) {
+      console.error('Invalid CSRF config in #drf_csrf', error);
+      return null;
+    }
+  }
+
   async function request(method, url, data = null) {
     const options = {
       method,
@@ -21,6 +38,12 @@ const RestApi6 = (() => {
       },
       credentials: 'same-origin',
     };
+    if (!SAFE_METHODS.includes(method)) {
+      const csrf = csrfConfig();
+      if (csrf && csrf.csrfToken) {
+        options.headers[csrf.csrfHeaderName || 'X-CSRFToken'] = csrf.csrfToken;
+      }
+    }
     if (data !== null) {
       //options.headers['Content-Type'] = 'application/json';
       options.body = objectToFormData(data);
