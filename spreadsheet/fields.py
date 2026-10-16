@@ -1,5 +1,6 @@
 import logging
 
+from django.core.exceptions import ImproperlyConfigured, ObjectDoesNotExist
 from django.utils.translation import gettext_lazy as _
 from django.urls import NoReverseMatch, Resolver404, get_script_prefix, resolve
 from django.utils.encoding import uri_to_iri

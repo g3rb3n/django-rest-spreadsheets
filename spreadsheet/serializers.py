@@ -83,6 +83,11 @@ class RefModelSerializer(serializers.ModelSerializer):
         fields = super().get_fields()
         logger.debug('get_fields')
         logger.debug(fields)
+        # A natural key is entered on create, but changing it on update
+        # would make Django save a copy under the new key.
+        pk_name = self.Meta.model._meta.pk.name
+        if self.instance is not None and pk_name in fields:
+            fields[pk_name].read_only = True
         return fields
 
     def get_default_field_names(self, declared_fields, model_info):
@@ -95,6 +100,7 @@ class RefModelSerializer(serializers.ModelSerializer):
         return (
             ['_'] +
             ['_str'] +
+            [model_info.pk.name] +
             list(declared_fields) +
             list(model_info.fields) +
             list(model_info.forward_relations) +

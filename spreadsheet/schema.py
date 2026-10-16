@@ -3,7 +3,7 @@ import inspect
 import logging
 import sys
 
-from collections import OrderedDict
+from django.db.models.fields import AutoFieldMixin
 from rest_framework import serializers
 from rest_framework import fields as rffields
 
@@ -19,8 +19,11 @@ def generate_field_schema(field):
         'name': field.name,
         'type': data_type
     }
-    if field.name == 'id':
+    if getattr(field, 'primary_key', False):
         schema['isKey'] = True
+        # The database or a default fills it in; otherwise it is entered
+        # on create (a natural key).
+        schema['generated'] = isinstance(field, AutoFieldMixin) or field.has_default()
     if isinstance(field, django.db.models.fields.Field):
         schema['title'] = field.verbose_name
     if isinstance(field, django.db.models.fields.related.ForeignKey):
@@ -40,11 +43,18 @@ def generate_field_schema(field):
     if hasattr(field, 'blank'):
         schema['required'] = not field.blank
     if hasattr(field, 'choices') and field.choices:
-        sorted_choices = sorted(field.get_choices(), key=lambda tup: tup[1])
+        # flatchoices: no blank entry, option groups flattened, in the order
+        # the model defines (e.g. Draft, Sent, Paid). A list of {const, title}
+        # keeps the value types and that order in JSON.
         schema['type'] = 'oneOf'
-        schema['oneOf'] = OrderedDict(sorted_choices)
+        schema['oneOf'] = [{'const': value, 'title': title} for value, title in field.flatchoices]
     if data_type == 'string':
         schema['length'] = field.max_length
+    if data_type == 'number' and field.get_internal_type() == 'FloatField':
+        schema['step'] = 'any'
+    if data_type == 'number' and field.get_internal_type() == 'DecimalField':
+        # One unit in the last decimal place, e.g. 0.01 for money.
+        schema['step'] = f'{10 ** -field.decimal_places:.{field.decimal_places}f}'
     return schema
 
 
@@ -72,23 +82,43 @@ def generate_model_schema(model_class):
     return model_schema
 
 
+FIELD_TYPES = {
+    'CharField': 'string',
+    'SlugField': 'string',
+    'UUIDField': 'string',
+    'GenericIPAddressField': 'string',
+    'FilePathField': 'string',
+    'DurationField': 'string',
+    'TextField': 'text',
+    'BooleanField': 'boolean',
+    'IntegerField': 'integer',
+    'SmallIntegerField': 'integer',
+    'BigIntegerField': 'integer',
+    'PositiveIntegerField': 'integer',
+    'PositiveSmallIntegerField': 'integer',
+    'PositiveBigIntegerField': 'integer',
+    'AutoField': 'integer',
+    'SmallAutoField': 'integer',
+    'BigAutoField': 'integer',
+    'DecimalField': 'number',
+    'FloatField': 'number',
+    'DateTimeField': 'datetime',
+    'DateField': 'date',
+    'TimeField': 'time',
+    'ForeignKey': 'object',
+    'OneToOneField': 'object',
+    'ManyToManyField': 'many',
+    'OneToOneRel': 'object',
+    'OneToManyRel': 'object',
+    'ManyToOneRel': 'object',
+    'ManyToManyRel': 'object',
+}
+
+
 def get_type(field):
     t = field.get_internal_type()
-    if t == 'CharField': return 'string'
-    if t == 'BooleanField': return 'boolean'
-    if t == 'IntegerField': return 'integer'
-    if t == 'DecimalField': return 'number'
-    if t == 'DateTimeField': return 'datetime'
-    if t == 'DateField': return 'date'
-    if t == 'TimeField': return 'time'
-    if t == 'AutoField': return 'integer'
-    if t == 'ForeignKey': return 'object'
-    if t == 'OneToOneField': return 'object'
-    if t == 'ManyToManyField': return 'many'
-    if t == 'OneToOneRel': return 'object'
-    if t == 'OneToManyRel': return 'object'
-    if t == 'ManyToOneRel': return 'object'
-    if t == 'ManyToManyRel': return 'object'
+    if t in FIELD_TYPES:
+        return FIELD_TYPES[t]
     logger.error('Unsupported field in get_type %s for %s', t, field)
     return t
 
