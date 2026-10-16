@@ -15,20 +15,20 @@ test-cafe:
 	npx testcafe "chrome" spreadsheet/testcafe/test_create.js
 
 run:
-	pipenv run python ./manage.py runserver
+	pipenv run python testproject/manage.py runserver
 
 run-background:
-	pipenv run python ./manage.py runserver &
+	pipenv run python testproject/manage.py runserver &
 
 setup:
 	pipenv --python 3.9
 	pipenv install
-	pipenv run python ./manage.py makemigrations testproject
-	pipenv run python ./manage.py migrate
+	pipenv run python testproject/manage.py makemigrations testproject
+	pipenv run python testproject/manage.py migrate
 	DJANGO_SUPERUSER_USERNAME=$(DJANGO_SUPERUSER_USERNAME) \
 	DJANGO_SUPERUSER_EMAIL=$(DJANGO_SUPERUSER_EMAIL) \
 	DJANGO_SUPERUSER_PASSWORD=$(DJANGO_SUPERUSER_PASSWORD) \
-	pipenv run python ./manage.py createsuperuser --noinput
+	pipenv run python testproject/manage.py createsuperuser --noinput
 
 setup-dev:
 	pipenv install -d

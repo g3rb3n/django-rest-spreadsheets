@@ -25,9 +25,6 @@ SECRET_KEY = 'q5=%!!u*4qz#wwz2k=g6i8%b-wn@omkhcd_-kt07^%s$+qz^7%'
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
-
-
 # Application definition
 
 INSTALLED_APPS = [
@@ -59,8 +56,8 @@ TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
         'DIRS': [
-            'spreadsheet/templates',
-            'testproject/templates',
+            os.path.join(BASE_DIR, 'spreadsheet/templates'),
+            os.path.join(BASE_DIR, 'testproject/templates'),
         ],
         'APP_DIRS': True,
         'OPTIONS': {
@@ -130,7 +127,7 @@ STATICFILES_DIRS = (
   os.path.join(BASE_DIR, 'spreadsheet/static/'),
 )
 
-ALLOWED_HOSTS = ['localhost']
+ALLOWED_HOSTS = ['localhost', '127.0.0.1']
 
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:8000",
