@@ -1,0 +1,234 @@
+[
+  {
+    "model": "bookkeeping.customer",
+    "pk": 1,
+    "fields": {
+      "name": "Acme Gardens",
+      "email": "billing@acme-gardens.example",
+      "phone": "+31 20 123 4567",
+      "address": "Herengracht 1\n1015 BA Amsterdam",
+      "vat_number": "NL001234567B01",
+      "hourly_rate": "85.00",
+      "active": true
+    }
+  },
+  {
+    "model": "bookkeeping.customer",
+    "pk": 2,
+    "fields": {
+      "name": "Bloom & Co",
+      "email": "finance@bloom.example",
+      "phone": "+31 30 765 4321",
+      "address": "Oudegracht 99\n3511 AB Utrecht",
+      "vat_number": "NL009876543B01",
+      "hourly_rate": "95.00",
+      "active": true
+    }
+  },
+  {
+    "model": "bookkeeping.customer",
+    "pk": 3,
+    "fields": {
+      "name": "Old Orchard",
+      "email": "",
+      "phone": "",
+      "address": "",
+      "vat_number": "",
+      "hourly_rate": "75.00",
+      "active": false
+    }
+  },
+  {
+    "model": "bookkeeping.invoice",
+    "pk": 1,
+    "fields": {
+      "number": "2025-0001",
+      "customer": 1,
+      "date": "2025-01-31",
+      "due_date": "2025-03-02",
+      "status": "paid",
+      "notes": ""
+    }
+  },
+  {
+    "model": "bookkeeping.invoice",
+    "pk": 2,
+    "fields": {
+      "number": "2025-0002",
+      "customer": 2,
+      "date": "2025-02-28",
+      "due_date": "2025-03-30",
+      "status": "sent",
+      "notes": "Please mention the invoice number with your payment."
+    }
+  },
+  {
+    "model": "bookkeeping.invoice",
+    "pk": 3,
+    "fields": {
+      "number": "2025-0003",
+      "customer": 1,
+      "date": "2025-03-31",
+      "due_date": "2025-04-30",
+      "status": "draft",
+      "notes": ""
+    }
+  },
+  {
+    "model": "bookkeeping.invoiceitem",
+    "pk": 1,
+    "fields": {
+      "invoice": 1,
+      "description": "Garden design consultancy",
+      "quantity": "12.00",
+      "unit_price": "85.00",
+      "vat_rate": 21
+    }
+  },
+  {
+    "model": "bookkeeping.invoiceitem",
+    "pk": 2,
+    "fields": {
+      "invoice": 1,
+      "description": "Planting plan",
+      "quantity": "1.00",
+      "unit_price": "350.00",
+      "vat_rate": 21
+    }
+  },
+  {
+    "model": "bookkeeping.invoiceitem",
+    "pk": 3,
+    "fields": {
+      "invoice": 2,
+      "description": "Consultancy",
+      "quantity": "16.50",
+      "unit_price": "95.00",
+      "vat_rate": 21
+    }
+  },
+  {
+    "model": "bookkeeping.invoiceitem",
+    "pk": 4,
+    "fields": {
+      "invoice": 2,
+      "description": "Seeds and bulbs",
+      "quantity": "1.00",
+      "unit_price": "120.00",
+      "vat_rate": 9
+    }
+  },
+  {
+    "model": "bookkeeping.invoiceitem",
+    "pk": 5,
+    "fields": {
+      "invoice": 3,
+      "description": "Consultancy",
+      "quantity": "6.00",
+      "unit_price": "85.00",
+      "vat_rate": 21
+    }
+  },
+  {
+    "model": "bookkeeping.invoiceitem",
+    "pk": 6,
+    "fields": {
+      "invoice": 3,
+      "description": "Travel expenses",
+      "quantity": "1.00",
+      "unit_price": "42.50",
+      "vat_rate": 0
+    }
+  },
+  {
+    "model": "bookkeeping.timesheet",
+    "pk": 1,
+    "fields": {
+      "customer": 1,
+      "date": "2025-01-14",
+      "start_time": "09:00",
+      "end_time": "17:00",
+      "description": "Site visit and measurements",
+      "billable": true,
+      "invoice": 1
+    }
+  },
+  {
+    "model": "bookkeeping.timesheet",
+    "pk": 2,
+    "fields": {
+      "customer": 1,
+      "date": "2025-01-21",
+      "start_time": "09:00",
+      "end_time": "13:00",
+      "description": "Garden design",
+      "billable": true,
+      "invoice": 1
+    }
+  },
+  {
+    "model": "bookkeeping.timesheet",
+    "pk": 3,
+    "fields": {
+      "customer": 2,
+      "date": "2025-02-10",
+      "start_time": "08:30",
+      "end_time": "17:00",
+      "description": "Consultancy",
+      "billable": true,
+      "invoice": 2
+    }
+  },
+  {
+    "model": "bookkeeping.timesheet",
+    "pk": 4,
+    "fields": {
+      "customer": 2,
+      "date": "2025-02-17",
+      "start_time": "09:00",
+      "end_time": "17:00",
+      "description": "Consultancy",
+      "billable": true,
+      "invoice": 2
+    }
+  },
+  {
+    "model": "bookkeeping.timesheet",
+    "pk": 5,
+    "fields": {
+      "customer": 1,
+      "date": "2025-03-12",
+      "start_time": "10:00",
+      "end_time": "16:00",
+      "description": "Consultancy",
+      "billable": true,
+      "invoice": 3
+    }
+  },
+  {
+    "model": "bookkeeping.timesheet",
+    "pk": 6,
+    "fields": {
+      "customer": 2,
+      "date": "2025-04-02",
+      "start_time": "09:00",
+      "end_time": "12:00",
+      "description": "Follow-up meeting",
+      "billable": true,
+      "invoice": null
+    }
+  },
+  {
+    "model": "bookkeeping.timesheet",
+    "pk": 7,
+    "fields": {
+      "customer": 1,
+      "date": "2025-04-03",
+      "start_time": "14:00",
+      "end_time": "15:00",
+      "description": "Phone call about planting season",
+      "billable": false,
+      "invoice": null
+    }
+  }
+]

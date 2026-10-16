@@ -1,6 +1,6 @@
 include config.mk
 
-test: test-py test-cafe
+test: test-py test-bookkeeping test-cafe
 
 test-ui:
 	pipenv run python -m pytest spreadsheet/tests/ui/ --cov=spreadsheet --cov-report=html
@@ -10,6 +10,9 @@ test-backend:
 
 test-py:
 	pipenv run python -m pytest spreadsheet/tests/ --cov=spreadsheet --cov-report=html
+
+test-bookkeeping:
+	pipenv run python -m pytest bookkeeping/tests/ --ds=bookkeeping.settings
 
 test-cafe:
 	DJANGO_SUPERUSER_USERNAME=$(DJANGO_SUPERUSER_USERNAME) \
@@ -22,6 +25,9 @@ run:
 run-background:
 	pipenv run python testproject/manage.py runserver &
 
+run-bookkeeping:
+	pipenv run python bookkeeping/manage.py runserver 8001
+
 setup:
 	pipenv --python 3.9
 	pipenv install
@@ -32,6 +38,14 @@ setup:
 	DJANGO_SUPERUSER_PASSWORD=$(DJANGO_SUPERUSER_PASSWORD) \
 	pipenv run python testproject/manage.py createsuperuser --noinput
 
+setup-bookkeeping:
+	pipenv run python bookkeeping/manage.py migrate
+	pipenv run python bookkeeping/manage.py loaddata demo
+	DJANGO_SUPERUSER_USERNAME=$(DJANGO_SUPERUSER_USERNAME) \
+	DJANGO_SUPERUSER_EMAIL=$(DJANGO_SUPERUSER_EMAIL) \
+	DJANGO_SUPERUSER_PASSWORD=$(DJANGO_SUPERUSER_PASSWORD) \
+	pipenv run python bookkeeping/manage.py createsuperuser --noinput
+
 setup-dev:
 	pipenv install -d
 	pipenv run playwright install
@@ -39,6 +53,9 @@ setup-dev:
 
 open-ui:
 	xdg-open http://localhost:8000
+
+open-bookkeeping:
+	xdg-open http://localhost:8001
 
 open-coverage:
 	chromium $(CURDIR)/htmlcov/index.html

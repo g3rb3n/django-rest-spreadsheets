@@ -12,7 +12,7 @@ setuptools.setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/g3rb3n/django-rest-spreadsheets/",
-    packages=setuptools.find_packages(exclude=['testproject*']),
+    packages=setuptools.find_packages(exclude=['testproject*', 'bookkeeping*']),
     package_data={'django-rest-spreadsheets': ['spreadsheet/static', 'spreadsheet/templates', 'spreadsheet/migrations']},
     include_package_data=True,
 

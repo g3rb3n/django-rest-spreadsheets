@@ -1,5 +1,6 @@
 .coverage
 db.sqlite3
+bookkeeping.sqlite3
 node_modules/
 build/
 dist/
