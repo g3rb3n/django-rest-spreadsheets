@@ -240,7 +240,6 @@ th h2 {
     text-overflow: ellipsis;
 }
 
-th .tooltip ,
 td .feedback {
     visibility: hidden;
     background-color: white;
@@ -258,12 +257,6 @@ td .feedback {
     top: -30px;
 }
 
-th .tooltip {
-    top: 0px;
-    padding: 4px 2px;
-}
-
-th:hover .tooltip ,
 td.error .feedback {
     visibility: visible;
 }
@@ -331,6 +324,38 @@ th.selected ,
 th.selected h2 ,
 tr.selected td.key {
     font-weight: bold;
+}
+
+/*****
+ * Sortable column headers, with an arrow on the sorted one
+*****/
+th {
+    cursor: pointer;
+    user-select: none;
+}
+
+th.sort-asc::after ,
+th.sort-desc::after {
+    position: absolute;
+    right: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 0.7em;
+}
+
+th.sort-asc::after {
+    content: '▲';
+}
+
+th.sort-desc::after {
+    content: '▼';
+}
+
+/* Keep the title clear of the arrow. */
+th.sort-asc h2 ,
+th.sort-desc h2 {
+    box-sizing: border-box;
+    padding-right: 1em;
 }
 
 /* Let clicks on read-only cells through, so they can be selected too. */

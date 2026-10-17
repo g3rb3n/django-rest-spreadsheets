@@ -64,3 +64,43 @@ def test_create(live_server, admin_user):
         expect(page.locator('.messages .message')).to_have_count(0)
 
         browser.close()
+
+
+@pytest.mark.django_db
+def test_sort(live_server):
+    from testproject.models import Plant, Variety
+    raspberry = Variety.objects.create(name='Raspberry')
+    blackberry = Variety.objects.create(name='Blackberry')
+    # The server orders on -date_planted: A, c, b.
+    Plant.objects.create(variety=raspberry, place='b', date_planted='2025-01-01')
+    Plant.objects.create(variety=blackberry, place='A', date_planted='2025-03-01')
+    Plant.objects.create(variety=raspberry, place='c', date_planted='2025-02-01')
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch()
+        page = browser.new_page()
+        page.goto(live_server.url)
+
+        table = open_model(page, 'Plant')
+        places = table.locator('tr.row [name=place]')
+        expect(places).to_have_count(3)
+        assert [el.input_value() for el in places.all()] == ['A', 'c', 'b']
+
+        place = table.locator('th[data-name=place]')
+        place.click()
+        expect(place).to_have_attribute('aria-sort', 'ascending')
+        assert [el.input_value() for el in places.all()] == ['A', 'b', 'c']
+        place.click()
+        expect(place).to_have_attribute('aria-sort', 'descending')
+        assert [el.input_value() for el in places.all()] == ['c', 'b', 'A']
+        place.click()
+        expect(place).not_to_have_attribute('aria-sort', 'descending')
+        assert [el.input_value() for el in places.all()] == ['A', 'c', 'b']
+
+        # A relation sorts on its label, not its URL.
+        table.locator('th[data-name=variety]').click()
+        assert [el.input_value() for el in places.all()][0] == 'A'
+        assert table.locator('tr.row [name=variety] option:checked').all_text_contents() == \
+            ['Blackberry', 'Raspberry', 'Raspberry']
+
+        browser.close()

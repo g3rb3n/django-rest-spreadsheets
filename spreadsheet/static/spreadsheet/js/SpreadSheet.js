@@ -5,6 +5,7 @@ const SpreadSheet = (() => {
     let gSchema = {};
     const objectCache = {};
     const selectDataCache = {}
+    let rowCount = 0;  // load order of rows, to undo sorting
     $.datetimepicker.setDateFormatter('moment');
 
     const MESSAGE_TIMEOUT = 10000;
@@ -665,7 +666,89 @@ const SpreadSheet = (() => {
         $table.on('mouseover', 'th', clearHover);
         $table.on('mouseleave', clearHover);
         $table.on('contextmenu', 'td', onContextMenu);
+        $table.on('click', 'th', onHeaderClick);
         return $table;
+    }
+
+    /**
+     * Clicking a column header sorts on it: ascending, descending, then
+     * back to the order the server sent. Sorting is done in the browser,
+     * so the server's ordering and filters stay in charge of what is loaded.
+     */
+    function onHeaderClick(){
+        const $table = $(this).closest('table');
+        const column = this.cellIndex;
+        const sort = $table.data('sort');
+        let direction = 1;
+        if (sort && sort.column === column)
+            direction = sort.direction === 1 ? -1 : 0;
+        $table.data('sort', direction ? {column, direction} : null);
+        const $headers = $table.find('tr').first().children();
+        $headers.removeClass('sort-asc sort-desc').removeAttr('aria-sort');
+        if (direction)
+            $headers.eq(column)
+                .addClass(direction === 1 ? 'sort-asc' : 'sort-desc')
+                .attr('aria-sort', direction === 1 ? 'ascending' : 'descending');
+        sortTable($table);
+    }
+
+    /**
+     * What a cell is sorted on: what it shows, so a dropdown sorts on its
+     * label rather than its URL. Null for an empty cell.
+     */
+    function sortValue($td, numeric){
+        const $input = cellInput($td);
+        let value;
+        if (!$input.length) value = $td.text().trim();
+        else if ($input.is(':checkbox')) return $input.prop('checked') ? 1 : 0;
+        else if ($input.is('select')) value = $input.find('option:selected').text();
+        else value = $input.val();
+        if (value === '' || value == null) return null;
+        if (numeric){
+            const number = parseFloat(value);
+            return isNaN(number) ? null : number;
+        }
+        return value;
+    }
+
+    function compareValues(a, b){
+        if (typeof a === 'number') return a - b;
+        return a.localeCompare(b, undefined, {numeric: true, sensitivity: 'base'});
+    }
+
+    function sortTable($table){
+        const $rows = $table.find('tr.row');
+        const sort = $table.data('sort');
+        let rows = $rows.get();
+        if (!sort){
+            rows.sort((a, b) => $(a).data('order') - $(b).data('order'));
+        } else {
+            const $th = $table.find('tr').first().children().eq(sort.column);
+            const numeric = $th.hasClass('key') || ['number', 'integer'].includes($th.attr('type'));
+            const values = new Map(rows.map(row =>
+                [row, sortValue($(row).children().eq(sort.column), numeric)]));
+            rows.sort((a, b) => {
+                const x = values.get(a), y = values.get(b);
+                // Empty cells go last either way, as in Google Sheets.
+                if (x === null || y === null) return (x === null) - (y === null);
+                return sort.direction * compareValues(x, y);
+            });
+        }
+        $table.append(rows);
+    }
+
+    /**
+     * Sort again once the dropdowns in the sorted column have their
+     * labels; they load after the rows.
+     */
+    function sortTableWhenLoaded($table){
+        const sort = $table.data('sort');
+        if (!sort) return;
+        const url = $table.find('tr.row').first().children().eq(sort.column)
+            .find('select[data-url]').attr('data-url');
+        const entry = url && selectDataCache[url];
+        if (entry && entry.status === 'pending') entry.callbacks.push(() => sortTable($table));
+        else sortTable($table);
     }
 
     /**
@@ -712,11 +795,7 @@ const SpreadSheet = (() => {
                 .attr('data-class', field.$ref)
                 .attr('type', field.type)
                 .appendTo($tr);
-            var $h2 = $('<h2>')
-                .text(field.title)
-                .appendTo($th);
-            $('<span>')
-                .addClass('tooltip')
+            $('<h2>')
                 .text(field.title)
                 .appendTo($th);
         });
@@ -771,6 +850,7 @@ const SpreadSheet = (() => {
         data.forEach(function(item){
             addTableRow($table, schema, modelName, item);
         })
+        sortTableWhenLoaded($table);
     }
 
     function collectData($form) {
@@ -970,7 +1050,9 @@ const SpreadSheet = (() => {
 
 
     function addTableRow($table, schema, modelName, item){
-        createTableRowItem($table, schema, modelName, '', item).appendTo($table);
+        createTableRowItem($table, schema, modelName, '', item)
+            .data('order', rowCount++)
+            .appendTo($table);
     }
 
     function init(config) {
