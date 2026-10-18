@@ -5,7 +5,11 @@ const RestApi6 = (() => {
     for (const key in obj) {
       if (Object.prototype.hasOwnProperty.call(obj, key)) {
         const value = obj[key];
-        if (value !== null && value !== undefined) {
+        if (Array.isArray(value)) {
+          // One entry per item; a lone empty one for an empty list.
+          if (!value.length) formData.append(key, '');
+          value.forEach(item => formData.append(key, item));
+        } else if (value !== null && value !== undefined) {
           formData.append(key, value);
         }
       }

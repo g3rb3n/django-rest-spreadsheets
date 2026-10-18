@@ -36,6 +36,18 @@ class Ref(str):
     is_hyperlink = True
 
 
+class RefManyRelatedField(relations.ManyRelatedField):
+    """
+    A to-many relation that can be emptied from form data: the UI sends a
+    single empty value for "none selected", as a form has no empty list.
+    """
+    def get_value(self, dictionary):
+        value = super().get_value(dictionary)
+        if isinstance(value, list):
+            value = [item for item in value if item != '']
+        return value
+
+
 class RefRelatedField(relations.RelatedField):
     lookup_field = 'pk'
     view_name = None
@@ -61,6 +73,14 @@ class RefRelatedField(relations.RelatedField):
         self.reverse = reverse
 
         super(RefRelatedField, self).__init__(**kwargs)
+
+    @classmethod
+    def many_init(cls, *args, **kwargs):
+        list_kwargs = {'child_relation': cls(*args, **kwargs)}
+        for key in kwargs:
+            if key in relations.MANY_RELATION_KWARGS:
+                list_kwargs[key] = kwargs[key]
+        return RefManyRelatedField(**list_kwargs)
 
     def use_pk_only_optimization(self):
         return False

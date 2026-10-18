@@ -16,8 +16,15 @@ def test_generate_schema():
     assert plant['fields'] == ["id",
             "variety",
             "date_planted",
-            "place"
+            "place",
+            "companions",
     ]
     assert plant['properties']['variety']['type'] == 'object'
     assert plant['properties']['variety']['multiple'] == False
     assert plant['properties']['variety']['required'] == True
+    companions = plant['properties']['companions']
+    assert companions['type'] == 'many'
+    assert companions['$ref'] == 'Variety'
+    assert companions['multiple'] == True
+    assert companions['required'] == False
+    assert 'readOnly' not in companions

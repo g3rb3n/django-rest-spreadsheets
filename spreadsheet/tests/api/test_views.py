@@ -112,3 +112,30 @@ def test_primary_key_is_listed_and_read_only(admin_user):
     assert created['id'] != 999
     response = client.patch(f'/rest/api/Variety/{variety.pk}/', {'id': 555})
     assert response.json()['id'] == variety.pk
+
+
+@pytest.mark.django_db
+def test_many_to_many_set_and_clear(admin_user):
+    """The UI sends form data: one entry per item, a lone '' for none."""
+    plant = PlantFactory()
+    raspberry = VarietyFactory(name='Raspberry')
+    blackberry = VarietyFactory(name='Blackberry')
+    client = APIClient()
+    client.force_authenticate(admin_user)
+    url = f'/rest/api/Plant/{plant.pk}/'
+    companions = [f'/rest/api/Variety/{raspberry.pk}/', f'/rest/api/Variety/{blackberry.pk}/']
+
+    response = client.patch(url, {'companions': companions}, format='multipart')
+    assert response.status_code == 200
+    assert sorted(response.json()['companions']) == sorted(f'http://testserver{c}' for c in companions)
+    assert set(plant.companions.all()) == {raspberry, blackberry}
+
+    # Other fields leave the relation alone.
+    response = client.patch(url, {'place': 'Bed'}, format='multipart')
+    assert response.status_code == 200
+    assert plant.companions.count() == 2
+
+    response = client.patch(url, {'companions': ''}, format='multipart')
+    assert response.status_code == 200
+    assert response.json()['companions'] == []
+    assert plant.companions.count() == 0

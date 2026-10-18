@@ -118,6 +118,14 @@ const SpreadSheet = (() => {
     /**
      * The row header cell (as in a spreadsheet) showing the primary key.
      */
+    /**
+     * Reverse relations are not columns; a many-to-many field is one,
+     * shown as a multi-select.
+     */
+    function isColumn(field){
+        return !field.multiple || field.type === 'many';
+    }
+
     function createKeyCell(tag, schema) {
         return $(`<${tag}>`).addClass('key').attr('data-name', keyField(schema).name);
     }
@@ -200,6 +208,7 @@ const SpreadSheet = (() => {
             updateInputs(url, key, data[key]);
         }
         $('option[data-url="' + url + '"]').text(toString(modelName, data));
+        renderMultiSelect($selects);
     }
 
     function handleDelete(modelName, url, data, $tables, $forms, $selects){
@@ -279,9 +288,28 @@ const SpreadSheet = (() => {
             const $select = $(select);
             $select.val(null);
             if ($select.attr('data-selected')) {
-                $select.val($select.attr('data-selected'));
+                $select.val(getSelected($select));
             }
         });
+        renderMultiSelect($selects);
+    }
+
+    /**
+     * The value a <select> should have once its options are loaded: a URL,
+     * or for a multi-select a list of URLs, kept as JSON.
+     */
+    function setSelected($select, value){
+        $select.attr('data-selected', $select.prop('multiple') ? JSON.stringify(value || []) : value);
+    }
+
+    function getSelected($select){
+        const value = $select.attr('data-selected');
+        if (!$select.prop('multiple')) return value;
+        try {
+            return JSON.parse(value || '[]');
+        } catch (error) {
+            return [];
+        }
     }
 
     function updateInputs(url, key, value){
@@ -289,7 +317,8 @@ const SpreadSheet = (() => {
         $inputs.filter(':checkbox').prop('checked', value === true);
         $inputs.not(':checkbox').val(value);
         // Keep fixSelections from restoring the value from before the update.
-        $inputs.filter('select').attr('data-selected', value);
+        $inputs.filter('select').each((_, select) => setSelected($(select), value));
+        renderMultiSelect($inputs);
     }
 
     /*
@@ -346,6 +375,7 @@ const SpreadSheet = (() => {
         $tr.find('select').each((_, select) => {
             $(select).val(select.querySelector('option[value=""]') ? '' : null);
         });
+        renderMultiSelect($tr.find('select'));
     }
 
     function onDataChange(ev){
@@ -425,9 +455,35 @@ const SpreadSheet = (() => {
         if (!$input.length) return $td.text().trim();
         const input = $input[0];
         if ($input.is(':checkbox')) return input.checked ? 'TRUE' : 'FALSE';
-        if ($input.is('select')) return $input.find('option:selected').text();
+        if ($input.is('select')) return selectedLabels($input);
         const range = textSelection(input);
         return range ? input.value.slice(range[0], range[1]) : input.value;
+    }
+
+    // The labels of the selected options; comma separated for a multi-select.
+    function selectedLabels($select){
+        return $select.find('option:selected').map((_, option) => option.text).get().join(', ');
+    }
+
+    // The option with this label or value, ignoring case.
+    function findOption(select, text){
+        const wanted = text.trim().toLowerCase();
+        return [...select.options].find(option =>
+            option.text.trim().toLowerCase() === wanted || option.value === text.trim());
+    }
+
+    /**
+     * The values for comma separated labels in a multi-select, or null
+     * when one of them is not an option. A label with a comma in it
+     * matches as a whole.
+     */
+    function findOptionValues(select, text){
+        if (!text.trim()) return [];
+        const whole = findOption(select, text);
+        if (whole) return [whole.value];
+        const options = text.split(',').filter(part => part.trim()).map(part => findOption(select, part));
+        if (options.some(option => !option)) return null;
+        return options.map(option => option.value);
     }
 
     /**
@@ -442,10 +498,13 @@ const SpreadSheet = (() => {
             if (['true', '1', 'yes', 'y', 'x'].includes(value)) input.checked = true;
             else if (['false', '0', 'no', 'n', ''].includes(value)) input.checked = false;
             else return false;
+        } else if ($input.is('select[multiple]')){
+            const values = findOptionValues(input, text);
+            if (!values) return false;
+            $input.val(values);
+            renderMultiSelect($input);
         } else if ($input.is('select')){
-            const wanted = text.trim().toLowerCase();
-            const option = [...input.options].find(option =>
-                option.text.trim().toLowerCase() === wanted || option.value === text.trim());
+            const option = findOption(input, text);
             if (!option) return false;
             $input.val(option.value);
         } else {
@@ -459,7 +518,7 @@ const SpreadSheet = (() => {
 
     function canClear($td){
         const $input = cellInput($td);
-        return !$input.is('select') || $input.find('option[value=""]').length > 0;
+        return !$input.is('select') || $input.prop('multiple') || $input.find('option[value=""]').length > 0;
     }
 
     async function writeClipboard(text){
@@ -628,6 +687,130 @@ const SpreadSheet = (() => {
     document.addEventListener('scroll', () => closeContextMenu(), true);
 
     /*
+     * Multi-select, as the dropdown chips in Google Sheets: the hidden
+     * <select multiple> holds the value, a button next to it shows the
+     * selected labels and opens a checklist. Changes save on closing it.
+     */
+    function renderMultiSelect($selects){
+        $selects.filter('select[multiple]').each((_, select) => {
+            const $select = $(select);
+            let $button = $select.next('.multi-select');
+            if (!$button.length){
+                if (!select.parentNode) return;
+                $button = $('<button>')
+                    .attr('type', 'button')
+                    .attr('aria-haspopup', 'listbox')
+                    .addClass('multi-select')
+                    .insertAfter($select);
+            }
+            $button.prop('disabled', select.disabled).empty();
+            $select.find('option:selected').each((_, option) => {
+                $('<span>').addClass('chip').text(option.text).appendTo($button);
+            });
+        });
+    }
+
+    function onMultiSelectClick(){
+        const $menu = $('.multi-select-menu');
+        const open = $menu.length && $menu.data('button') === this;
+        closeMultiSelectMenu();
+        if (!open) openMultiSelectMenu($(this));
+    }
+
+    function onMultiSelectKeydown(ev){
+        if (ev.key != 'ArrowDown') return;
+        ev.preventDefault();
+        openMultiSelectMenu($(this));
+    }
+
+    function openMultiSelectMenu($button){
+        closeMultiSelectMenu();
+        const $select = $button.prev('select');
+        const $menu = $('<div>')
+            .addClass('multi-select-menu')
+            .attr('role', 'listbox')
+            .attr('aria-multiselectable', 'true')
+            .data('select', $select)
+            .data('button', $button[0])
+            .data('before', JSON.stringify($select.val()))
+            .appendTo('body');
+        $select.find('option').each((_, option) => {
+            const $label = $('<label>').attr('role', 'option').appendTo($menu);
+            $('<input>')
+                .attr('type', 'checkbox')
+                .prop('checked', option.selected)
+                .on('change', function(){
+                    option.selected = this.checked;
+                    renderMultiSelect($select);
+                })
+                .appendTo($label);
+            $('<span>').text(option.text).appendTo($label);
+        });
+        if (!$select.find('option').length)
+            $('<div>').addClass('empty').text('No options').appendTo($menu);
+        // Below the cell, kept on screen.
+        const rect = $button.closest('td')[0].getBoundingClientRect();
+        $menu.css('min-width', rect.width);
+        const width = $menu.outerWidth(), height = $menu.outerHeight();
+        $menu.css({
+            left: Math.max(0, Math.min(rect.left, window.innerWidth - width - 4)),
+            top: rect.bottom + height > window.innerHeight ? Math.max(0, rect.top - height) : rect.bottom,
+        });
+        $menu.on('keydown', onMultiSelectMenuKeydown);
+        $menu.find('input').first().trigger('focus');
+    }
+
+    function onMultiSelectMenuKeydown(ev){
+        const $items = $(this).find('input');
+        const index = $items.index(document.activeElement);
+        if (ev.key == 'ArrowDown' || ev.key == 'ArrowUp'){
+            ev.preventDefault();
+            const step = ev.key == 'ArrowDown' ? 1 : -1;
+            $items.eq((index + step + $items.length) % $items.length).trigger('focus');
+        } else if (ev.key == 'Escape'){
+            ev.preventDefault();
+            closeMultiSelectMenu(true, true);
+        } else if (ev.key == 'Enter' || ev.key == 'Tab'){
+            ev.preventDefault();
+            closeMultiSelectMenu(true);
+        }
+    }
+
+    /**
+     * Close the checklist and save when the selection changed; Escape
+     * (cancel) puts the selection back instead.
+     */
+    function closeMultiSelectMenu(restoreFocus, cancel){
+        const $menu = $('.multi-select-menu');
+        if (!$menu.length) return;
+        const $select = $menu.data('select');
+        const button = $menu.data('button');
+        const before = $menu.data('before');
+        $menu.remove();
+        if (cancel) {
+            $select.val(JSON.parse(before));
+            renderMultiSelect($select);
+        } else if (JSON.stringify($select.val()) !== before) {
+            $select.trigger('change');
+        }
+        if (restoreFocus) button.focus();
+    }
+
+    $(document).on('click', 'button.multi-select', onMultiSelectClick);
+    $(document).on('keydown', 'button.multi-select', onMultiSelectKeydown);
+    $(document).on('mousedown', ev => {
+        const $menu = $('.multi-select-menu');
+        // Its own button toggles it on click.
+        if ($(ev.target).closest('.multi-select-menu').length) return;
+        if ($menu.length && $(ev.target).closest('button.multi-select')[0] === $menu.data('button')) return;
+        closeMultiSelectMenu();
+    });
+    $(window).on('blur resize', () => closeMultiSelectMenu());
+    document.addEventListener('scroll', ev => {
+        if (!$(ev.target).closest('.multi-select-menu').length) closeMultiSelectMenu();
+    }, true);
+
+    /*
     *
     * Tables
     *
@@ -701,7 +884,7 @@ const SpreadSheet = (() => {
         let value;
         if (!$input.length) value = $td.text().trim();
         else if ($input.is(':checkbox')) return $input.prop('checked') ? 1 : 0;
-        else if ($input.is('select')) value = $input.find('option:selected').text();
+        else if ($input.is('select')) value = selectedLabels($input);
         else value = $input.val();
         if (value === '' || value == null) return null;
         if (numeric){
@@ -789,7 +972,7 @@ const SpreadSheet = (() => {
         schema.fields.forEach(function(key){
             var field = schema.properties[key];
             if (field.isKey) return
-            if (field.multiple) return
+            if (!isColumn(field)) return
             var $th = $('<th>')
                 .attr('data-name', key)
                 .attr('data-class', field.$ref)
@@ -811,7 +994,7 @@ const SpreadSheet = (() => {
         schema.fields.forEach(function(key){
             var field = schema.properties[key];
             if (field.isKey) return
-            if (field.multiple) return
+            if (!isColumn(field)) return
             const $col = $('<col>')
                 .attr('type', field.type)
                 .appendTo($cg);
@@ -891,10 +1074,12 @@ const SpreadSheet = (() => {
         schema.fields.forEach(function(key){
             var field = schema.properties[key];
             if (field.isKey) return;
-            if (field.multiple) return;
+            if (!isColumn(field)) return;
             var $td = $('<td>').appendTo($tr);
             var $input = createInput(field, null).appendTo($td);
             if (field.required) $input.attr('required', 'required');
+            if (field.readOnly) $input.prop('disabled', true);
+            renderMultiSelect($input);
             var $feedback = $('<span>').addClass('feedback').attr('for',field.name).appendTo($td);
         })
         return $tr;
@@ -916,11 +1101,12 @@ const SpreadSheet = (() => {
             var field = schema.properties[key];
             var value = data[key];
             if (field.isKey) return;
-            if (field.multiple) return;
+            if (!isColumn(field)) return;
             var $td = $('<td>').appendTo($tr);
             var $input = createInputWithValue(field, value).appendTo($td);
             if (field.required) $input.attr('required', 'required');
-            if (!can(modelName, 'update')) $input.prop('disabled', true);
+            if (!can(modelName, 'update') || field.readOnly) $input.prop('disabled', true);
+            renderMultiSelect($input);
             var $feedback = $('<span>').addClass('feedback').attr('for',field.name).appendTo($td);
         })
         return $tr;
@@ -931,7 +1117,7 @@ const SpreadSheet = (() => {
         // Existing rows save on change; the new-item row waits for Create.
         $input.on('change', onDataChange);
         if ($input.prop("tagName") == "SELECT"){
-            $input.attr('data-selected', value);
+            setSelected($input, value);
         }else if ($input.attr('type') == 'checkbox'){
             $input.prop('checked', value === true);
         }else if ($input.prop("tagName") == "TEXTAREA"){
@@ -954,6 +1140,7 @@ const SpreadSheet = (() => {
             case 'time': return $('<input>').attr('type', 'text').attr('name', schema.name).datetimepicker({ datepicker: false, format: 'HH:mm', });
             case 'oneOf': return createSelectFromChoices(schema, value).attr('name', schema.name);
             case 'object': return createSelectFromData(schema, value).attr('name', schema.name);
+            case 'many': return createSelectFromData(schema, value).attr('name', schema.name);
             default:
                 // Show the value but leave it out of collectData (no name),
                 // so one unknown field doesn't break the whole table.
@@ -982,12 +1169,14 @@ const SpreadSheet = (() => {
         var url = urlForModel(schema.$ref)
         var $select = $('<select>')
             .attr('data-url', url)
-            .attr('data-class', schema.$ref);
-        // Optional relations need a way to select "none".
-        if (!schema.required)
+            .attr('data-class', schema.$ref)
+            .prop('multiple', !!schema.multiple);
+        // Optional relations need a way to select "none"; a multi-select
+        // selects nothing.
+        if (!schema.required && !schema.multiple)
             $('<option>').attr('value', '').appendTo($select);
         if (value)
-            $select.attr('data-selected', value);
+            setSelected($select, value);
         cachedFillSelect(schema, url, $select);
         return $select;
     }
@@ -1010,7 +1199,8 @@ const SpreadSheet = (() => {
                 if ($select.find(`option[value="${item._}"]`).length) return;
                 createOption(schema.$ref, item).appendTo($select);
             });
-            $select.val($select.attr('data-selected'));
+            $select.val(getSelected($select));
+            renderMultiSelect($select);
         }
 
         // If we already have data, just populate

@@ -19,6 +19,9 @@ class Plant(models.Model):
     variety = models.ForeignKey(Variety, related_name='plants', on_delete=models.CASCADE)
     date_planted = models.DateField(verbose_name=_('Date planted'))
     place = models.CharField(max_length=NAME_LENGTH, verbose_name=_('Place'))
+    # Varieties planted alongside it.
+    companions = models.ManyToManyField(
+        Variety, related_name='companion_plants', blank=True, verbose_name=_('Companions'))
 
     class Meta:
         ordering = ['-date_planted']

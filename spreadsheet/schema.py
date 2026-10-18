@@ -33,6 +33,9 @@ def generate_field_schema(field):
     if isinstance(field, django.db.models.fields.related.ManyToManyField):
         schema['$ref'] = field.related_model.__name__
         schema['multiple'] = True
+        # DRF can't write through a custom through model.
+        if not field.remote_field.through._meta.auto_created:
+            schema['readOnly'] = True
     if isinstance(field, django.db.models.fields.reverse_related.ForeignObjectRel):
         if (field.remote_field.name[-4:] == '_ptr'):
             return None

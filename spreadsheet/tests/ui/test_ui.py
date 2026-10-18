@@ -104,3 +104,76 @@ def test_sort(live_server):
             ['Blackberry', 'Raspberry', 'Raspberry']
 
         browser.close()
+
+
+def saving(page, method):
+    """Wait for the page to save, around the action that triggers it."""
+    return page.expect_response(lambda response: response.request.method == method)
+
+
+@pytest.mark.django_db
+def test_multi_select(live_server, admin_user):
+    from testproject.models import Plant, Variety
+    raspberry = Variety.objects.create(name='Raspberry')
+    Variety.objects.create(name='Blackberry')
+    plant = Plant.objects.create(variety=raspberry, place='Bed', date_planted='2025-01-01')
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch()
+        page = browser.new_page()
+        page.goto(live_server.url)
+        log_in(page, admin_user.username, 'password')
+
+        table = open_model(page, 'Plant')
+        cell = table.locator('tr.row button.multi-select')
+        expect(cell).to_have_count(1)
+        expect(cell.locator('.chip')).to_have_count(0)
+
+        # Pick two; they save when the checklist closes.
+        cell.click()
+        menu = page.locator('.multi-select-menu')
+        menu.get_by_text('Raspberry').click()
+        menu.get_by_text('Blackberry').click()
+        expect(cell.locator('.chip')).to_have_text(['Blackberry', 'Raspberry'])
+        with saving(page, 'PATCH') as response:
+            page.keyboard.press('Enter')
+        expect(menu).to_have_count(0)
+        assert len(response.value.json()['companions']) == 2
+
+        # Escape puts the selection back without saving.
+        cell.click()
+        menu.get_by_text('Raspberry').click()
+        expect(cell.locator('.chip')).to_have_text(['Blackberry'])
+        page.keyboard.press('Escape')
+        expect(cell.locator('.chip')).to_have_text(['Blackberry', 'Raspberry'])
+
+        # Unchecking all of them, then clicking elsewhere, saves none.
+        cell.click()
+        menu.get_by_text('Raspberry').click()
+        menu.get_by_text('Blackberry').click()
+        with saving(page, 'PATCH') as response:
+            page.locator('header').click()
+        expect(menu).to_have_count(0)
+        expect(cell.locator('.chip')).to_have_count(0)
+        assert response.value.json()['companions'] == []
+
+        # The new-item row takes them too.
+        new_item = table.locator('tr[data-action=create]')
+        new_item.locator('[name=date_planted]').fill('2025-03-21')
+        page.keyboard.press('Escape')  # close the date picker
+        new_item.locator('[name=place]').fill('Garden')
+        new_item.locator('[name=variety]').select_option(label='Raspberry')
+        new_item.locator('button.multi-select').click()
+        menu.get_by_text('Blackberry').click()
+        page.keyboard.press('Enter')
+        new_item.locator('[name=place]').press('Enter')
+        expect(table.locator('tr.row')).to_have_count(2)
+        expect(table.locator('tr.row', has=page.locator('[name=place][value=Garden]'))
+               .locator('.chip')).to_have_text(['Blackberry'])
+        expect(page.locator('.messages .message')).to_have_count(0)
+
+        browser.close()
+
+    assert not plant.companions.exists()
+    garden = Plant.objects.get(place='Garden')
+    assert list(garden.companions.values_list('name', flat=True)) == ['Blackberry']
